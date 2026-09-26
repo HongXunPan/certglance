@@ -1,0 +1,81 @@
+// !$*UTF8*$!
+{
+    archiveVersion = 1;
+    classes = {};
+    objectVersion = 56;
+    objects = {
+        C10000000000000000000001 = {isa = PBXBuildFile; fileRef = B10000000000000000000001; };
+        C10000000000000000000002 = {isa = PBXBuildFile; fileRef = B10000000000000000000002; };
+        C10000000000000000000003 = {isa = PBXBuildFile; fileRef = B10000000000000000000003; };
+        C10000000000000000000004 = {isa = PBXBuildFile; fileRef = B10000000000000000000009; };
+        C10000000000000000000005 = {isa = PBXBuildFile; fileRef = B1000000000000000000000A; };
+        C10000000000000000000006 = {isa = PBXBuildFile; fileRef = B1000000000000000000000B; };
+        C10000000000000000000007 = {isa = PBXBuildFile; fileRef = B1000000000000000000000C; };
+        C10000000000000000000008 = {isa = PBXBuildFile; fileRef = B1000000000000000000000D; };
+        C10000000000000000000009 = {isa = PBXBuildFile; fileRef = B1000000000000000000000E; };
+        C1000000000000000000000A = {isa = PBXBuildFile; fileRef = B10000000000000000000006; };
+        C1000000000000000000000B = {isa = PBXBuildFile; fileRef = B10000000000000000000009; };
+        C1000000000000000000000C = {isa = PBXBuildFile; fileRef = B1000000000000000000000A; };
+        C1000000000000000000000D = {isa = PBXBuildFile; fileRef = B1000000000000000000000B; };
+        C1000000000000000000000E = {isa = PBXBuildFile; fileRef = B1000000000000000000000C; };
+        C1000000000000000000000F = {isa = PBXBuildFile; fileRef = B1000000000000000000000D; };
+        C10000000000000000000010 = {isa = PBXBuildFile; fileRef = B1000000000000000000000E; };
+        C10000000000000000000011 = {isa = PBXBuildFile; fileRef = B10000000000000000000010; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+        C10000000000000000000012 = {isa = PBXBuildFile; fileRef = B10000000000000000000011; };
+        C10000000000000000000013 = {isa = PBXBuildFile; fileRef = B10000000000000000000012; };
+        C10000000000000000000014 = {isa = PBXBuildFile; fileRef = B10000000000000000000013; };
+        C10000000000000000000015 = {isa = PBXBuildFile; fileRef = B10000000000000000000013; };
+
+        E10000000000000000000003 = {isa = PBXContainerItemProxy; containerPortal = A10000000000000000000001; proxyType = 1; remoteGlobalIDString = E10000000000000000000002; remoteInfo = SSLExpiryWidget; };
+        D10000000000000000000004 = {isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 13; files = (C10000000000000000000011, ); name = "嵌入小组件扩展"; runOnlyForDeploymentPostprocessing = 0; };
+
+        B10000000000000000000001 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSLWidgetApp.swift; sourceTree = "<group>"; };
+        B10000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardModel.swift; sourceTree = "<group>"; };
+        B10000000000000000000003 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DomainManagementView.swift; sourceTree = "<group>"; };
+        B10000000000000000000004 = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+        B10000000000000000000005 = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = App.entitlements; sourceTree = "<group>"; };
+        B10000000000000000000006 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSLExpiryWidget.swift; sourceTree = "<group>"; };
+        B10000000000000000000007 = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+        B10000000000000000000008 = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Widget.entitlements; sourceTree = "<group>"; };
+        B10000000000000000000009 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DomainModels.swift; sourceTree = "<group>"; };
+        B1000000000000000000000A = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedStore.swift; sourceTree = "<group>"; };
+        B1000000000000000000000B = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CertificateChecker.swift; sourceTree = "<group>"; };
+        B1000000000000000000000C = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardRefresher.swift; sourceTree = "<group>"; };
+        B1000000000000000000000D = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationCoordinator.swift; sourceTree = "<group>"; };
+        B1000000000000000000000E = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeverityStyle.swift; sourceTree = "<group>"; };
+        B1000000000000000000000F = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SSLWidget.app; sourceTree = BUILT_PRODUCTS_DIR; };
+        B10000000000000000000010 = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SSLExpiryWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+        B10000000000000000000011 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSLExpiryProvider.swift; sourceTree = "<group>"; };
+        B10000000000000000000012 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSLExpiryWidgetView.swift; sourceTree = "<group>"; };
+        B10000000000000000000013 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationPolicy.swift; sourceTree = "<group>"; };
+
+        D10000000000000000000002 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+        D10000000000000000000006 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+
+        A10000000000000000000002 = {isa = PBXGroup; children = (A10000000000000000000004, A10000000000000000000005, A10000000000000000000006, A10000000000000000000003, ); sourceTree = "<group>"; };
+        A10000000000000000000003 = {isa = PBXGroup; children = (B1000000000000000000000F, B10000000000000000000010, ); name = Products; sourceTree = "<group>"; };
+        A10000000000000000000004 = {isa = PBXGroup; children = (B10000000000000000000001, B10000000000000000000002, B10000000000000000000003, B10000000000000000000004, B10000000000000000000005, ); path = App; sourceTree = "<group>"; };
+        A10000000000000000000005 = {isa = PBXGroup; children = (B10000000000000000000006, B10000000000000000000011, B10000000000000000000012, B10000000000000000000007, B10000000000000000000008, ); path = Widget; sourceTree = "<group>"; };
+        A10000000000000000000006 = {isa = PBXGroup; children = (B10000000000000000000009, B1000000000000000000000A, B1000000000000000000000B, B1000000000000000000000C, B1000000000000000000000D, B10000000000000000000013, B1000000000000000000000E, ); path = Shared; sourceTree = "<group>"; };
+
+        E10000000000000000000001 = {isa = PBXNativeTarget; buildConfigurationList = G10000000000000000000002; buildPhases = (D10000000000000000000001, D10000000000000000000002, D10000000000000000000003, D10000000000000000000004, ); buildRules = (); dependencies = (E10000000000000000000004, ); name = SSLWidget; productName = SSLWidget; productReference = B1000000000000000000000F; productType = "com.apple.product-type.application"; };
+        E10000000000000000000002 = {isa = PBXNativeTarget; buildConfigurationList = G10000000000000000000003; buildPhases = (D10000000000000000000005, D10000000000000000000006, D10000000000000000000007, ); buildRules = (); dependencies = (); name = SSLExpiryWidget; productName = SSLExpiryWidget; productReference = B10000000000000000000010; productType = "com.apple.product-type.app-extension"; };
+        A10000000000000000000001 = {isa = PBXProject; attributes = {BuildIndependentTargetsInParallel = 1; LastUpgradeCheck = 2600; }; buildConfigurationList = G10000000000000000000001; compatibilityVersion = "Xcode 14.0"; developmentRegion = zh-Hans; hasScannedForEncodings = 0; knownRegions = (zh-Hans, Base, ); mainGroup = A10000000000000000000002; productRefGroup = A10000000000000000000003; projectDirPath = ""; projectRoot = ""; targets = (E10000000000000000000001, E10000000000000000000002, ); };
+        D10000000000000000000003 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+        D10000000000000000000007 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+        D10000000000000000000001 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (C10000000000000000000001, C10000000000000000000002, C10000000000000000000003, C10000000000000000000004, C10000000000000000000005, C10000000000000000000006, C10000000000000000000007, C10000000000000000000008, C10000000000000000000009, C10000000000000000000014, ); runOnlyForDeploymentPostprocessing = 0; };
+        D10000000000000000000005 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (C1000000000000000000000A, C10000000000000000000012, C10000000000000000000013, C1000000000000000000000B, C1000000000000000000000C, C1000000000000000000000D, C1000000000000000000000E, C1000000000000000000000F, C10000000000000000000010, C10000000000000000000015, ); runOnlyForDeploymentPostprocessing = 0; };
+        E10000000000000000000004 = {isa = PBXTargetDependency; target = E10000000000000000000002; targetProxy = E10000000000000000000003; };
+
+        F10000000000000000000001 = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; MACOSX_DEPLOYMENT_TARGET = 26.0; SDKROOT = macosx; SWIFT_VERSION = 6.0; }; name = Debug; };
+        F10000000000000000000002 = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; MACOSX_DEPLOYMENT_TARGET = 26.0; SDKROOT = macosx; SWIFT_VERSION = 6.0; }; name = Release; };
+        F10000000000000000000003 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_ENTITLEMENTS = App/App.entitlements; CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = App/Info.plist; MARKETING_VERSION = 0.1.0; PRODUCT_BUNDLE_IDENTIFIER = com.HongXunPan.SSLWidget; PRODUCT_NAME = "$(TARGET_NAME)"; }; name = Debug; };
+        F10000000000000000000004 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_ENTITLEMENTS = App/App.entitlements; CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = App/Info.plist; MARKETING_VERSION = 0.1.0; PRODUCT_BUNDLE_IDENTIFIER = com.HongXunPan.SSLWidget; PRODUCT_NAME = "$(TARGET_NAME)"; }; name = Release; };
+        F10000000000000000000005 = {isa = XCBuildConfiguration; buildSettings = {APPLICATION_EXTENSION_API_ONLY = YES; CODE_SIGN_ENTITLEMENTS = Widget/Widget.entitlements; CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = Widget/Info.plist; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/../../../../Frameworks", "@executable_path/../Frameworks", ); MARKETING_VERSION = 0.1.0; PRODUCT_BUNDLE_IDENTIFIER = com.HongXunPan.SSLWidget.Widget; PRODUCT_NAME = "$(TARGET_NAME)"; SKIP_INSTALL = YES; }; name = Debug; };
+        F10000000000000000000006 = {isa = XCBuildConfiguration; buildSettings = {APPLICATION_EXTENSION_API_ONLY = YES; CODE_SIGN_ENTITLEMENTS = Widget/Widget.entitlements; CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = Widget/Info.plist; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/../../../../Frameworks", "@executable_path/../Frameworks", ); MARKETING_VERSION = 0.1.0; PRODUCT_BUNDLE_IDENTIFIER = com.HongXunPan.SSLWidget.Widget; PRODUCT_NAME = "$(TARGET_NAME)"; SKIP_INSTALL = YES; }; name = Release; };
+        G10000000000000000000001 = {isa = XCConfigurationList; buildConfigurations = (F10000000000000000000001, F10000000000000000000002, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+        G10000000000000000000002 = {isa = XCConfigurationList; buildConfigurations = (F10000000000000000000003, F10000000000000000000004, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+        G10000000000000000000003 = {isa = XCConfigurationList; buildConfigurations = (F10000000000000000000005, F10000000000000000000006, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+    };
+    rootObject = A10000000000000000000001;
+}
