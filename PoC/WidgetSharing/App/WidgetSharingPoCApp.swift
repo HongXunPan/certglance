@@ -25,12 +25,12 @@ struct WidgetSharingPoCApp: App {
   private func writeMarker() {
     do {
       let marker = try WidgetSharingPoCFile.writeNewMarker()
-      result = "写入标记：\(marker)\n\(WidgetSharingPoCDiagnostics.inspect())"
+      result = "写入标记：\(marker)\n\(WidgetSharingPoCDiagnostics.inspect().fullText)"
       WidgetCenter.shared.reloadTimelines(ofKind: WidgetSharingPoCIdentity.widgetKind)
     } catch {
       result =
         "写入失败：\(WidgetSharingPoCDiagnostics.errorCode(error))\n"
-        + WidgetSharingPoCDiagnostics.inspect()
+        + WidgetSharingPoCDiagnostics.inspect().fullText
     }
   }
 }

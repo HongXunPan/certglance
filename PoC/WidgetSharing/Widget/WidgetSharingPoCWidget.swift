@@ -3,12 +3,22 @@ import WidgetKit
 
 private struct WidgetSharingPoCEntry: TimelineEntry {
   let date: Date
-  let result: String
+  let inspection: WidgetSharingPoCInspection
 }
 
 private struct WidgetSharingPoCProvider: TimelineProvider {
   func placeholder(in context: Context) -> WidgetSharingPoCEntry {
-    WidgetSharingPoCEntry(date: .now, result: "等待宿主写入假数据")
+    WidgetSharingPoCEntry(
+      date: .now,
+      inspection: WidgetSharingPoCInspection(
+        status: "等待宿主写入",
+        value: "尚无假标记",
+        readSucceeded: false,
+        location: "未知",
+        directoryFingerprint: "未知",
+        filePresence: "未知"
+      )
+    )
   }
 
   func getSnapshot(
@@ -29,7 +39,7 @@ private struct WidgetSharingPoCProvider: TimelineProvider {
   }
 
   private func makeEntry() -> WidgetSharingPoCEntry {
-    WidgetSharingPoCEntry(date: .now, result: WidgetSharingPoCDiagnostics.inspect())
+    WidgetSharingPoCEntry(date: .now, inspection: WidgetSharingPoCDiagnostics.inspect())
   }
 }
 
@@ -37,19 +47,36 @@ private struct WidgetSharingPoCView: View {
   let entry: WidgetSharingPoCEntry
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 8) {
-      Label("SSL 共享 PoC", systemImage: "lock.shield")
-        .font(.headline)
-      Text(entry.result)
+    VStack(alignment: .leading, spacing: 5) {
+      Label("SSL 共享", systemImage: "lock.shield")
+        .font(.caption.weight(.semibold))
+      Text(entry.inspection.status)
         .font(.caption2)
-        .lineLimit(5)
+        .foregroundStyle(.secondary)
+      Text(entry.inspection.value)
+        .font(
+          entry.inspection.readSucceeded
+            ? .system(.title3, design: .monospaced).weight(.semibold) : .caption2
+        )
+        .lineLimit(entry.inspection.readSucceeded ? 1 : 2)
+        .minimumScaleFactor(0.75)
+      Text("位置：\(entry.inspection.location)")
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+        .minimumScaleFactor(0.75)
+      Text("目录：\(entry.inspection.directoryFingerprint)")
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
       Spacer(minLength: 0)
-      Text("仅假数据 · 版本 1")
+      Text("仅假数据 · 版本 2")
         .font(.caption2)
         .foregroundStyle(.secondary)
     }
     .padding()
     .containerBackground(.background, for: .widget)
+    .accessibilityElement(children: .combine)
   }
 }
 

@@ -1,8 +1,21 @@
 import CryptoKit
 import Foundation
 
+struct WidgetSharingPoCInspection {
+  let status: String
+  let value: String
+  let readSucceeded: Bool
+  let location: String
+  let directoryFingerprint: String
+  let filePresence: String
+
+  var fullText: String {
+    "\(status)：\(value)\n位置：\(location) · 目录标识：\(directoryFingerprint) · 文件：\(filePresence)"
+  }
+}
+
 enum WidgetSharingPoCDiagnostics {
-  static func inspect() -> String {
+  static func inspect() -> WidgetSharingPoCInspection {
     do {
       let directory = try WidgetSharingPoCFile.directoryURL()
       let file = directory.appendingPathComponent(WidgetSharingPoCIdentity.filename)
@@ -10,14 +23,34 @@ enum WidgetSharingPoCDiagnostics {
         .prefix(4).map { String(format: "%02x", $0) }.joined()
       let location = try locationLabel(for: directory)
       let presence = FileManager.default.fileExists(atPath: file.path) ? "存在" : "不存在"
-      let summary = "位置：\(location) · 目录标识：\(fingerprint) · 文件：\(presence)"
       do {
-        return "\(summary)\n读取成功：\(try WidgetSharingPoCFile.readMarker())"
+        return WidgetSharingPoCInspection(
+          status: "读取成功",
+          value: try WidgetSharingPoCFile.readMarker(),
+          readSucceeded: true,
+          location: location,
+          directoryFingerprint: fingerprint,
+          filePresence: presence
+        )
       } catch {
-        return "\(summary)\n读取失败：\(errorCode(error))"
+        return WidgetSharingPoCInspection(
+          status: "读取失败",
+          value: errorCode(error),
+          readSucceeded: false,
+          location: location,
+          directoryFingerprint: fingerprint,
+          filePresence: presence
+        )
       }
     } catch {
-      return "路径准备失败：\(errorCode(error))"
+      return WidgetSharingPoCInspection(
+        status: "路径准备失败",
+        value: errorCode(error),
+        readSucceeded: false,
+        location: "未知",
+        directoryFingerprint: "未知",
+        filePresence: "未知"
+      )
     }
   }
 
