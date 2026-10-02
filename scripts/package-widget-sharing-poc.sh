@@ -109,16 +109,24 @@ security list-keychains -d user -s "${keychain_path}" "${original_keychains[@]}"
 security import "${certificate_path}" -k "${keychain_path}" \
   -P "${SSL_WIDGET_SIGNING_P12_PASSWORD}" \
   -T /usr/bin/codesign -T /usr/bin/security
+printf '[通过] 已导入专用签名身份\n'
+printf '[开始] 配置临时钥匙串签名访问\n'
 security set-key-partition-list -S apple-tool:,apple:,codesign: \
-  -s -k "${keychain_password}" "${keychain_path}"
+  -s -k "${keychain_password}" "${keychain_path}" >/dev/null
+printf '[通过] 临时钥匙串签名访问已配置\n'
+printf '[开始] 导出并检查签名证书\n'
 security find-certificate -c "${signing_identity}" -p "${keychain_path}" \
   >"${certificate_pem_path}"
 openssl x509 -in "${certificate_pem_path}" -noout -checkend 0 >/dev/null ||
   fail '签名证书已过期或无法解析'
+printf '[通过] 签名证书可解析且未过期\n'
+printf '[开始] 设置临时证书信任\n'
 security add-trusted-cert -r trustRoot -p codeSign \
   -k "${keychain_path}" "${certificate_pem_path}"
 trust_added=1
+printf '[通过] 临时证书信任已设置\n'
 
+printf '[开始] 校验唯一签名身份与指纹\n'
 identity_lines="$(security find-identity -v -p codesigning "${keychain_path}" |
   grep -F "\"${signing_identity}\"" || true)"
 [[ "$(printf '%s\n' "${identity_lines}" | grep -c . || true)" == 1 ]] ||
@@ -127,6 +135,7 @@ certificate_sha1="$(printf '%s\n' "${identity_lines}" | awk '{print $2}')"
 expected_sha1="$(printf '%s' "${SSL_WIDGET_SIGNING_CERT_SHA1}" | tr '[:lower:]' '[:upper:]')"
 [[ "${certificate_sha1}" == "${expected_sha1}" ]] ||
   fail '证书指纹与仓库固定配置不一致'
+printf '[通过] 签名身份与固定指纹一致\n'
 
 printf '[开始] 先签 Widget，再签宿主 App\n'
 codesign --force --sign "${certificate_sha1}" \
