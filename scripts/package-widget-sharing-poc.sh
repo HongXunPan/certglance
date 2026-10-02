@@ -1,0 +1,205 @@
+#!/bin/bash
+set -euo pipefail
+
+fail() {
+  printf '[失败] %s\n' "$1" >&2
+  exit 1
+}
+
+for name in SSL_WIDGET_SIGNING_P12_BASE64 SSL_WIDGET_SIGNING_P12_PASSWORD SSL_WIDGET_SIGNING_CERT_SHA1; do
+  [[ -n "${!name:-}" ]] || fail "缺少签名配置：${name}"
+done
+[[ "${SSL_WIDGET_SIGNING_CERT_SHA1}" =~ ^[[:xdigit:]]{40}$ ]] ||
+  fail '证书 SHA-1 必须是 40 位十六进制字符串'
+
+for command_name in xcodebuild xcrun security codesign hdiutil ditto openssl plutil shasum; do
+  command -v "${command_name}" >/dev/null 2>&1 || fail "缺少命令：${command_name}"
+done
+[[ -x /usr/libexec/PlistBuddy ]] || fail '找不到系统 PlistBuddy'
+
+umask 077
+project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+work_parent="${project_root}/.codex-tmp"
+output_directory="${project_root}/dist"
+mkdir -p "${work_parent}" "${output_directory}"
+work_directory="$(mktemp -d "${work_parent}/widget-sharing-signing-$(date +%Y%m%d)-XXXXXX")"
+derived_data="${work_directory}/DerivedData"
+app_path="${derived_data}/Build/Products/Release/WidgetSharingPoC.app"
+widget_path="${app_path}/Contents/PlugIns/WidgetSharingPoCWidget.appex"
+keychain_path="${work_directory}/signing.keychain-db"
+certificate_path="${work_directory}/signing.p12"
+certificate_pem_path="${work_directory}/signing.pem"
+original_keychains_path="${work_directory}/original-keychains.txt"
+staging_directory="${work_directory}/dmg-root"
+mount_point="${work_directory}/mounted-dmg"
+dmg_path="${output_directory}/widget-sharing-poc.dmg"
+report_path="${output_directory}/widget-sharing-poc-verification.txt"
+checksum_path="${output_directory}/SHA256SUMS"
+signing_identity='SSL Widget By HongXunPan'
+app_identifier='com.HongXunPan.SSLWidget.WidgetSharingPoC'
+widget_identifier="${app_identifier}.Widget"
+shared_path='/Library/Application Support/com.HongXunPan.SSLWidget.WidgetSharingPoC/'
+mounted=0
+keychain_created=0
+trust_added=0
+
+cleanup() {
+  local result=$?
+  trap - EXIT
+  if [[ "${mounted}" -eq 1 ]]; then
+    hdiutil detach "${mount_point}" -force >/dev/null 2>&1 || true
+  fi
+  if [[ "${trust_added}" -eq 1 && -f "${certificate_pem_path}" ]]; then
+    if ! security remove-trusted-cert "${certificate_pem_path}" >/dev/null 2>&1; then
+      printf '[失败] 未能移除临时证书信任\n' >&2
+      result=1
+    fi
+  fi
+  if [[ -f "${original_keychains_path}" ]]; then
+    local original_keychains=()
+    while IFS= read -r keychain; do
+      original_keychains+=("${keychain}")
+    done <"${original_keychains_path}"
+    if ! security list-keychains -d user -s "${original_keychains[@]}" >/dev/null 2>&1; then
+      printf '[失败] 未能恢复钥匙串搜索列表\n' >&2
+      result=1
+    fi
+  fi
+  if [[ "${keychain_created}" -eq 1 ]]; then
+    if ! security delete-keychain "${keychain_path}" >/dev/null 2>&1; then
+      printf '[失败] 未能删除临时钥匙串\n' >&2
+      result=1
+    fi
+  fi
+  if [[ "${result}" -ne 0 ]]; then
+    rm -f "${dmg_path}" "${report_path}" "${checksum_path}"
+  fi
+  rm -rf "${work_directory}"
+  exit "${result}"
+}
+trap cleanup EXIT
+
+rm -f "${dmg_path}" "${report_path}" "${checksum_path}"
+
+printf '[开始] 无签名构建独立 PoC\n'
+xcodebuild -quiet \
+  -project "${project_root}/PoC/WidgetSharing/WidgetSharingPoC.xcodeproj" \
+  -scheme WidgetSharingPoC -configuration Release \
+  -destination 'generic/platform=macOS' -derivedDataPath "${derived_data}" \
+  ARCHS='arm64 x86_64' ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO build
+[[ -f "${app_path}/Contents/MacOS/WidgetSharingPoC" ]] || fail '缺少宿主可执行文件'
+[[ -f "${widget_path}/Contents/MacOS/WidgetSharingPoCWidget" ]] ||
+  fail '缺少嵌入的 Widget 可执行文件'
+
+printf '[开始] 导入 SSL Widget 专用签名身份\n'
+security list-keychains -d user |
+  sed -e 's/^[[:space:]]*"//' -e 's/"$//' >"${original_keychains_path}"
+printf '%s' "${SSL_WIDGET_SIGNING_P12_BASE64}" | /usr/bin/base64 -D >"${certificate_path}"
+keychain_password="$(openssl rand -hex 24)"
+security create-keychain -p "${keychain_password}" "${keychain_path}"
+keychain_created=1
+security set-keychain-settings -lut 21600 "${keychain_path}"
+security unlock-keychain -p "${keychain_password}" "${keychain_path}"
+
+original_keychains=()
+while IFS= read -r keychain; do
+  original_keychains+=("${keychain}")
+done <"${original_keychains_path}"
+security list-keychains -d user -s "${keychain_path}" "${original_keychains[@]}"
+security import "${certificate_path}" -k "${keychain_path}" \
+  -P "${SSL_WIDGET_SIGNING_P12_PASSWORD}" \
+  -T /usr/bin/codesign -T /usr/bin/security
+security set-key-partition-list -S apple-tool:,apple:,codesign: \
+  -s -k "${keychain_password}" "${keychain_path}"
+security find-certificate -c "${signing_identity}" -p "${keychain_path}" \
+  >"${certificate_pem_path}"
+openssl x509 -in "${certificate_pem_path}" -noout -checkend 0 >/dev/null ||
+  fail '签名证书已过期或无法解析'
+security add-trusted-cert -r trustRoot -p codeSign \
+  -k "${keychain_path}" "${certificate_pem_path}"
+trust_added=1
+
+identity_lines="$(security find-identity -v -p codesigning "${keychain_path}" |
+  grep -F "\"${signing_identity}\"" || true)"
+[[ "$(printf '%s\n' "${identity_lines}" | grep -c . || true)" == 1 ]] ||
+  fail '专用签名身份不存在或不唯一'
+certificate_sha1="$(printf '%s\n' "${identity_lines}" | awk '{print $2}')"
+expected_sha1="$(printf '%s' "${SSL_WIDGET_SIGNING_CERT_SHA1}" | tr '[:lower:]' '[:upper:]')"
+[[ "${certificate_sha1}" == "${expected_sha1}" ]] ||
+  fail '证书指纹与仓库固定配置不一致'
+
+printf '[开始] 先签 Widget，再签宿主 App\n'
+codesign --force --sign "${certificate_sha1}" \
+  --identifier "${widget_identifier}" \
+  --entitlements "${project_root}/PoC/WidgetSharing/Widget/Widget.entitlements" \
+  --options runtime --timestamp=none "${widget_path}"
+codesign --force --sign "${certificate_sha1}" \
+  --identifier "${app_identifier}" \
+  --entitlements "${project_root}/PoC/WidgetSharing/App/App.entitlements" \
+  --options runtime --timestamp=none "${app_path}"
+codesign --verify --deep --strict --verbose=2 "${app_path}"
+
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "${app_path}/Contents/Info.plist")" == "${app_identifier}" ]] ||
+  fail '宿主 Bundle ID 不匹配'
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "${widget_path}/Contents/Info.plist")" == "${widget_identifier}" ]] ||
+  fail 'Widget Bundle ID 不匹配'
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :NSExtension:NSExtensionPointIdentifier' "${widget_path}/Contents/Info.plist")" == 'com.apple.widgetkit-extension' ]] ||
+  fail 'Widget 扩展点不匹配'
+
+codesign -d --entitlements :- "${app_path}" >"${work_directory}/signed-app-entitlements.plist" 2>/dev/null
+codesign -d --entitlements :- "${widget_path}" >"${work_directory}/signed-widget-entitlements.plist" 2>/dev/null
+for entitlement_file in "${work_directory}/signed-app-entitlements.plist" "${work_directory}/signed-widget-entitlements.plist"; do
+  plutil -lint "${entitlement_file}" >/dev/null || fail '签名权限声明无法解析'
+  [[ "$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.app-sandbox' "${entitlement_file}")" == true ]] ||
+    fail '签名产物未保留 App Sandbox'
+  if /usr/libexec/PlistBuddy -c 'Print :com.apple.security.application-groups' "${entitlement_file}" >/dev/null 2>&1; then
+    fail '文件桥接 PoC 不应声明 App Group'
+  fi
+done
+app_access="$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.temporary-exception.files.home-relative-path.read-write:0' "${work_directory}/signed-app-entitlements.plist")"
+widget_access="$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.temporary-exception.files.home-relative-path.read-only:0' "${work_directory}/signed-widget-entitlements.plist")"
+[[ "${app_access}" == "${shared_path}" && "${widget_access}" == "${shared_path}" ]] ||
+  fail '宿主读写与 Widget 只读路径不一致'
+if /usr/libexec/PlistBuddy -c 'Print :com.apple.security.temporary-exception.files.home-relative-path.read-write' "${work_directory}/signed-widget-entitlements.plist" >/dev/null 2>&1; then
+  fail 'Widget 不应获得读写权限'
+fi
+
+for signed_bundle in "${app_path}" "${widget_path}"; do
+  requirement="$(codesign -dr - "${signed_bundle}" 2>&1)"
+  leaf_sha1="$(sed -nE 's/.*certificate leaf = H"([[:xdigit:]]{40})".*/\1/p' <<<"${requirement}")"
+  [[ "${leaf_sha1}" == "$(printf '%s' "${certificate_sha1}" | tr '[:upper:]' '[:lower:]')" ]] ||
+    fail '签名指定要求没有锁定同一张专用证书'
+  signing_details="$(codesign -dv --verbose=4 "${signed_bundle}" 2>&1)"
+  grep -Fxq 'TeamIdentifier=not set' <<<"${signing_details}" ||
+    fail '自签名产物不应带有 Apple Team ID'
+done
+
+printf '[开始] 制作并复核非公证 DMG\n'
+mkdir -p "${staging_directory}" "${mount_point}"
+ditto "${app_path}" "${staging_directory}/WidgetSharingPoC.app"
+ln -s /Applications "${staging_directory}/Applications"
+hdiutil create -ov -volname 'SSL 小组件共享验证' \
+  -srcfolder "${staging_directory}" -format UDZO "${dmg_path}"
+codesign --force --sign "${certificate_sha1}" --timestamp=none "${dmg_path}"
+codesign --verify --verbose=2 "${dmg_path}"
+hdiutil attach -readonly -nobrowse -mountpoint "${mount_point}" "${dmg_path}"
+mounted=1
+codesign --verify --deep --strict --verbose=2 "${mount_point}/WidgetSharingPoC.app"
+[[ -d "${mount_point}/WidgetSharingPoC.app/Contents/PlugIns/WidgetSharingPoCWidget.appex" ]] ||
+  fail 'DMG 内缺少 Widget 扩展'
+hdiutil detach "${mount_point}"
+mounted=0
+
+(cd "${output_directory}" && shasum -a 256 widget-sharing-poc.dmg >SHA256SUMS)
+cat >"${report_path}" <<EOF
+验证对象：SSL Widget 独立假数据 PoC
+宿主 Bundle ID：${app_identifier}
+Widget Bundle ID：${widget_identifier}
+共享目录：~${shared_path}
+签名证书：${signing_identity}
+叶证书 SHA-1 前 12 位：${certificate_sha1:0:12}
+权限：宿主专用目录读写，Widget 同目录只读；两端均保留沙盒且无 App Group
+静态结果：同证书签名、嵌入扩展、签名权限、DMG 内签名和 SHA-256 均已核验
+未验证：用户安装、系统小组件图库可见性、文件访问与刷新运行态
+EOF
+printf '[通过] 候选 DMG、静态报告及校验和位于 dist/\n'

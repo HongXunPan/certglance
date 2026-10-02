@@ -1,0 +1,61 @@
+name: SSL 小组件文件共享签名 PoC
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ssl-widget-sharing-poc
+  cancel-in-progress: false
+
+jobs:
+  package-poc:
+    name: 构建并签名独立假数据组件
+    runs-on: macos-26
+    timeout-minutes: 35
+    steps:
+      - name: 检出开源子仓
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: 确认手动运行分支
+        run: |
+          if [[ "$GITHUB_REF" != 'refs/heads/main' ]]; then
+            echo '只允许从 main 分支打包签名 PoC。' >&2
+            exit 1
+          fi
+
+      - name: 校验 PoC 结构与脚本
+        run: |
+          bash -n scripts/package-widget-sharing-poc.sh
+          plutil -lint \
+            PoC/WidgetSharing/WidgetSharingPoC.xcodeproj/project.pbxproj \
+            PoC/WidgetSharing/App/Info.plist \
+            PoC/WidgetSharing/Widget/Info.plist \
+            PoC/WidgetSharing/App/App.entitlements \
+            PoC/WidgetSharing/Widget/Widget.entitlements
+          xcrun swift format lint --recursive --strict \
+            PoC/WidgetSharing/App \
+            PoC/WidgetSharing/Widget \
+            PoC/WidgetSharing/Shared
+
+      - name: 使用 SSL Widget 专用证书打包
+        env:
+          SSL_WIDGET_SIGNING_P12_BASE64: ${{ secrets.SSL_WIDGET_SIGNING_P12_BASE64 }}
+          SSL_WIDGET_SIGNING_P12_PASSWORD: ${{ secrets.SSL_WIDGET_SIGNING_P12_PASSWORD }}
+          SSL_WIDGET_SIGNING_CERT_SHA1: ${{ vars.SSL_WIDGET_SIGNING_CERT_SHA1 }}
+        run: bash scripts/package-widget-sharing-poc.sh
+
+      - name: 上传候选 DMG 与静态核验结果
+        uses: actions/upload-artifact@v7
+        with:
+          name: ssl-widget-sharing-poc-${{ github.run_number }}
+          path: |
+            dist/widget-sharing-poc.dmg
+            dist/widget-sharing-poc-verification.txt
+            dist/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 3

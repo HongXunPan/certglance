@@ -30,6 +30,10 @@ xcrun swiftc -swift-version 6 -parse-as-library -module-cache-path .build/SwiftM
 
 无签名构建仅证明源码和工程能编译，不能证明系统小组件注册、共享容器和通知投递可用。
 
+## 签名文件共享实验
+
+独立的 [WidgetKit 共享 PoC](PoC/WidgetSharing/README.md) 只使用假数据，验证自签名宿主与小组件能否访问同一专用文件；它不修改正式应用。手动 [GitHub Actions 工作流](.github/workflows/widget-sharing-poc.yml) 可打包候选 DMG，但须先配置项目专用签名 Secrets。源码提交、静态构建和 CI 打包均不代表安装后共享已通过验收，也不会自动发布正式版。
+
 ## 开源许可
 
 本项目采用 [MIT 许可证](LICENSE)。
