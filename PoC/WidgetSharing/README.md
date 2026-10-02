@@ -30,7 +30,7 @@ xcodebuild -project PoC/WidgetSharing/WidgetSharingPoC.xcodeproj \
 
 证书显示名称固定为 `SSL Widget By HongXunPan`。只创建一次并离线保存受控备份；不得复用 `Mihomo Meter By HongXunPan`，也不得把 P12、密码、私钥或真实域名数据提交进仓库。配置 Secrets 与触发工作流都属于后续独立步骤。
 
-工作流使用 macOS 26 Runner 无签名构建，再将证书导入临时钥匙串，按 Widget → 宿主顺序签名，核对固定指纹、Bundle ID、沙盒、专用目录权限和 DMG 内嵌扩展。产物为 3 天保留的 Artifact，包含 `widget-sharing-poc.dmg`、`widget-sharing-poc-verification.txt` 与 `SHA256SUMS`。解压 Artifact 后，在其目录运行 `shasum -a 256 -c SHA256SUMS` 核对下载文件。静态核验通过只能证明签名和包结构，不能证明系统会注册组件或允许跨进程读取。
+工作流使用 macOS 26 Runner 无签名构建，再将证书导入临时钥匙串。脚本仅允许在 GitHub 托管 Runner 运行；导入管理员域信任设置前先核对固定指纹，只为该证书增加代码签名用途的信任，并为非交互导入设置 45 秒上限。此设置只作用于本次临时 Runner，不修改本机授权数据库。随后按 Widget → 宿主顺序签名，核对 Bundle ID、沙盒、专用目录权限和 DMG 内嵌扩展。产物为 3 天保留的 Artifact，包含 `widget-sharing-poc.dmg`、`widget-sharing-poc-verification.txt` 与 `SHA256SUMS`。解压 Artifact 后，在其目录运行 `shasum -a 256 -c SHA256SUMS` 核对下载文件。静态核验通过只能证明签名和包结构，不能证明系统会注册组件或允许跨进程读取。
 
 ## 自签名实机验收
 

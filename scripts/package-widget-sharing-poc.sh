@@ -6,6 +6,9 @@ fail() {
   exit 1
 }
 
+[[ "${GITHUB_ACTIONS:-}" == true && "${RUNNER_ENVIRONMENT:-}" == 'github-hosted' ]] ||
+  fail '签名打包仅允许在 GitHub 托管 Runner 运行'
+
 for name in SSL_WIDGET_SIGNING_P12_BASE64 SSL_WIDGET_SIGNING_P12_PASSWORD SSL_WIDGET_SIGNING_CERT_SHA1; do
   [[ -n "${!name:-}" ]] || fail "缺少签名配置：${name}"
 done
@@ -16,6 +19,7 @@ for command_name in xcodebuild xcrun security codesign hdiutil ditto openssl plu
   command -v "${command_name}" >/dev/null 2>&1 || fail "缺少命令：${command_name}"
 done
 [[ -x /usr/libexec/PlistBuddy ]] || fail '找不到系统 PlistBuddy'
+[[ -x /usr/bin/sudo && -x /usr/bin/perl ]] || fail '缺少非交互签名所需的系统命令'
 
 umask 077
 project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
@@ -29,6 +33,9 @@ widget_path="${app_path}/Contents/PlugIns/WidgetSharingPoCWidget.appex"
 keychain_path="${work_directory}/signing.keychain-db"
 certificate_path="${work_directory}/signing.p12"
 certificate_pem_path="${work_directory}/signing.pem"
+admin_trust_before_path="${work_directory}/admin-trust-before.plist"
+admin_trust_error_path="${work_directory}/admin-trust-export.err"
+trust_settings_path="${work_directory}/code-signing-trust.plist"
 original_keychains_path="${work_directory}/original-keychains.txt"
 staging_directory="${work_directory}/dmg-root"
 mount_point="${work_directory}/mounted-dmg"
@@ -41,19 +48,12 @@ widget_identifier="${app_identifier}.Widget"
 shared_path='/Library/Application Support/com.HongXunPan.SSLWidget.WidgetSharingPoC/'
 mounted=0
 keychain_created=0
-trust_added=0
 
 cleanup() {
   local result=$?
   trap - EXIT
   if [[ "${mounted}" -eq 1 ]]; then
     hdiutil detach "${mount_point}" -force >/dev/null 2>&1 || true
-  fi
-  if [[ "${trust_added}" -eq 1 && -f "${certificate_pem_path}" ]]; then
-    if ! security remove-trusted-cert "${certificate_pem_path}" >/dev/null 2>&1; then
-      printf '[失败] 未能移除临时证书信任\n' >&2
-      result=1
-    fi
   fi
   if [[ -f "${original_keychains_path}" ]]; then
     local original_keychains=()
@@ -119,12 +119,33 @@ security find-certificate -c "${signing_identity}" -p "${keychain_path}" \
   >"${certificate_pem_path}"
 openssl x509 -in "${certificate_pem_path}" -noout -checkend 0 >/dev/null ||
   fail '签名证书已过期或无法解析'
+expected_sha1="$(printf '%s' "${SSL_WIDGET_SIGNING_CERT_SHA1}" | tr '[:lower:]' '[:upper:]')"
+imported_sha1="$(openssl x509 -in "${certificate_pem_path}" -noout -fingerprint -sha1 |
+  awk -F= '{print $2}' | tr -d ':' | tr '[:lower:]' '[:upper:]')"
+[[ "${imported_sha1}" == "${expected_sha1}" ]] ||
+  fail '导入证书的指纹与仓库固定配置不一致'
 printf '[通过] 签名证书可解析且未过期\n'
-printf '[开始] 设置临时证书信任\n'
-security add-trusted-cert -r trustRoot -p codeSign \
-  -k "${keychain_path}" "${certificate_pem_path}"
-trust_added=1
-printf '[通过] 临时证书信任已设置\n'
+printf '[开始] 准备仅限代码签名的管理员域信任设置\n'
+trust_file_args=()
+if security trust-settings-export -d "${admin_trust_before_path}" \
+  >/dev/null 2>"${admin_trust_error_path}"; then
+  trust_file_args=(-i "${admin_trust_before_path}")
+elif grep -Fq 'No Trust Settings were found' "${admin_trust_error_path}"; then
+  printf '[说明] 管理员域原本没有自定义信任设置\n'
+else
+  cat "${admin_trust_error_path}" >&2
+  fail '无法安全读取管理员域原有信任设置'
+fi
+security add-trusted-cert "${trust_file_args[@]}" -r trustRoot -p codeSign \
+  -o "${trust_settings_path}" "${certificate_pem_path}" >/dev/null
+plutil -lint "${trust_settings_path}" >/dev/null || fail '代码签名信任设置文件无效'
+printf '[开始] 在本次托管 Runner 导入管理员域信任设置\n'
+if ! sudo -n /usr/bin/perl -e 'alarm 45; exec @ARGV' \
+  /usr/bin/security trust-settings-import -d "${trust_settings_path}"; then
+  fail '管理员域信任设置导入失败或超过 45 秒'
+fi
+# 托管 Runner 在作业结束后销毁，不修改本机或其他作业的信任设置。
+printf '[通过] 本次 Runner 的代码签名信任已设置\n'
 
 printf '[开始] 校验唯一签名身份与指纹\n'
 identity_lines="$(security find-identity -v -p codesigning "${keychain_path}" |
@@ -132,7 +153,6 @@ identity_lines="$(security find-identity -v -p codesigning "${keychain_path}" |
 [[ "$(printf '%s\n' "${identity_lines}" | grep -c . || true)" == 1 ]] ||
   fail '专用签名身份不存在或不唯一'
 certificate_sha1="$(printf '%s\n' "${identity_lines}" | awk '{print $2}')"
-expected_sha1="$(printf '%s' "${SSL_WIDGET_SIGNING_CERT_SHA1}" | tr '[:lower:]' '[:upper:]')"
 [[ "${certificate_sha1}" == "${expected_sha1}" ]] ||
   fail '证书指纹与仓库固定配置不一致'
 printf '[通过] 签名身份与固定指纹一致\n'
