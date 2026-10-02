@@ -6,12 +6,13 @@ struct WidgetSharingPoCInspection {
   let value: String
   let requestMarker: String
   let receiptMatched: Bool
+  let widgetBuildVersion: String?
   let location: String
   let directoryFingerprint: String
   let filePresence: String
 
   var fullText: String {
-    "\(status)：\(value)\n请求标记：\(requestMarker)\n位置：\(location) · 目录标识：\(directoryFingerprint)\n\(filePresence)"
+    "\(status)：\(value)\n请求标记：\(requestMarker)\n当前进程构建：\(WidgetSharingPoCIdentity.currentBuildVersion) · 回执构建：\(widgetBuildVersion ?? "未提供")\n位置：\(location) · 目录标识：\(directoryFingerprint)\n\(filePresence)"
   }
 }
 
@@ -28,7 +29,8 @@ enum WidgetSharingPoCDiagnostics {
         status: String,
         value: String,
         requestMarker: String = "无",
-        receiptMatched: Bool = false
+        receiptMatched: Bool = false,
+        widgetBuildVersion: String? = nil
       ) -> WidgetSharingPoCInspection {
         let manager = FileManager.default
         let requestPresence = manager.fileExists(atPath: requestFile.path) ? "存在" : "不存在"
@@ -38,6 +40,7 @@ enum WidgetSharingPoCDiagnostics {
           value: value,
           requestMarker: requestMarker,
           receiptMatched: receiptMatched,
+          widgetBuildVersion: widgetBuildVersion,
           location: location,
           directoryFingerprint: fingerprint,
           filePresence: "请求文件：\(requestPresence) · 回执文件：\(receiptPresence)"
@@ -59,7 +62,8 @@ enum WidgetSharingPoCDiagnostics {
           let receipt = try WidgetSharingPoCFile.writeReceipt(for: request)
           return result(
             status: "组件写回成功", value: receipt.receiptMarker,
-            requestMarker: request, receiptMatched: true
+            requestMarker: request, receiptMatched: true,
+            widgetBuildVersion: receipt.widgetBuildVersion
           )
         } catch {
           return result(status: "回执写入失败", value: errorCode(error), requestMarker: request)
@@ -71,12 +75,16 @@ enum WidgetSharingPoCDiagnostics {
       }
       do {
         let receipt = try WidgetSharingPoCFile.readReceipt()
-        let matched = receipt.requestMarker == request
+        let requestMatched = receipt.requestMarker == request
+        let buildMatched =
+          receipt.widgetBuildVersion == WidgetSharingPoCIdentity.currentBuildVersion
         return result(
-          status: matched ? "回执匹配" : "回执属于旧请求",
+          status: !requestMatched
+            ? "回执属于旧请求" : buildMatched ? "回执匹配" : "组件版本不匹配",
           value: receipt.receiptMarker,
           requestMarker: request,
-          receiptMatched: matched
+          receiptMatched: requestMatched && buildMatched,
+          widgetBuildVersion: receipt.widgetBuildVersion
         )
       } catch {
         return result(status: "回执读取失败", value: errorCode(error), requestMarker: request)
@@ -87,6 +95,7 @@ enum WidgetSharingPoCDiagnostics {
         value: errorCode(error),
         requestMarker: "未知",
         receiptMatched: false,
+        widgetBuildVersion: nil,
         location: "未知",
         directoryFingerprint: "未知",
         filePresence: "未知"

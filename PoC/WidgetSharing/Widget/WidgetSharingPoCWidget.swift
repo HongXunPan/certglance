@@ -15,6 +15,7 @@ private struct WidgetSharingPoCProvider: TimelineProvider {
         value: "尚无假请求",
         requestMarker: "无",
         receiptMatched: false,
+        widgetBuildVersion: nil,
         location: "未知",
         directoryFingerprint: "未知",
         filePresence: "未知"
@@ -73,7 +74,7 @@ private struct WidgetSharingPoCView: View {
         .foregroundStyle(.secondary)
         .lineLimit(1)
       Spacer(minLength: 0)
-      Text("仅假数据 · 版本 3")
+      Text("仅假数据 · 版本 4")
         .font(.caption2)
         .foregroundStyle(.secondary)
     }

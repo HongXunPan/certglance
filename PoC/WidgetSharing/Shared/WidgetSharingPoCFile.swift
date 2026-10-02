@@ -6,11 +6,16 @@ enum WidgetSharingPoCIdentity {
   static let requestFilename = "request.txt"
   static let receiptFilename = "receipt.json"
   static let widgetKind = "com.HongXunPan.SSLWidget.WidgetSharingPoC.widget"
+
+  static var currentBuildVersion: String {
+    Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "未知"
+  }
 }
 
 struct WidgetSharingPoCReceipt: Codable {
   let requestMarker: String
   let receiptMarker: String
+  let widgetBuildVersion: String?
 }
 
 enum WidgetSharingPoCFileError: Error {
@@ -74,13 +79,19 @@ enum WidgetSharingPoCFile {
 
   static func writeReceipt(for requestMarker: String) throws -> WidgetSharingPoCReceipt {
     let file = try receiptURL()
+    let buildVersion = WidgetSharingPoCIdentity.currentBuildVersion
     if FileManager.default.fileExists(atPath: file.path) {
       let existing = try readReceipt()
-      if existing.requestMarker == requestMarker { return existing }
+      if existing.requestMarker == requestMarker,
+        existing.widgetBuildVersion == buildVersion
+      {
+        return existing
+      }
     }
     let receipt = WidgetSharingPoCReceipt(
       requestMarker: requestMarker,
-      receiptMarker: String(UUID().uuidString.prefix(8))
+      receiptMarker: String(UUID().uuidString.prefix(8)),
+      widgetBuildVersion: buildVersion
     )
     try JSONEncoder().encode(receipt).write(to: file, options: .atomic)
     try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
