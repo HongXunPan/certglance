@@ -6,6 +6,10 @@ fail() {
   exit 1
 }
 
+diagnostic_without_helper="${WIDGET_SHARING_DIAGNOSTIC_WITHOUT_HELPER:-false}"
+[[ "${diagnostic_without_helper}" == true || "${diagnostic_without_helper}" == false ]] ||
+  fail '诊断开关必须是 true 或 false'
+
 [[ "${GITHUB_ACTIONS:-}" == true && "${RUNNER_ENVIRONMENT:-}" == 'github-hosted' ]] ||
   fail '签名打包仅允许在 GitHub 托管 Runner 运行'
 
@@ -99,6 +103,15 @@ xcodebuild -quiet \
   fail '缺少嵌入的 Widget 可执行文件'
 [[ -f "${helper_path}/Contents/MacOS/WidgetSharingRepairHelper" ]] ||
   fail '缺少嵌入的升级修复助手可执行文件'
+if [[ "${diagnostic_without_helper}" == true ]]; then
+  [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "${app_path}/Contents/Info.plist")" == 8 ]] ||
+    fail '无助手诊断仅允许构建 8，避免未来误用'
+  [[ -d "${helper_path}" && ! -L "${helper_path}" ]] || fail '诊断候选的助手包路径无效'
+  rm -r "${helper_path}"
+  rmdir "${app_path}/Contents/Helpers" || fail '诊断候选的助手目录含有非预期文件'
+  [[ ! -e "${helper_path}" && ! -L "${helper_path}" ]] || fail '诊断候选仍包含助手包'
+  printf '[诊断] 已从生成的 App 中移除嵌入助手；不改动宿主与 Widget 源码\n'
+fi
 
 printf '[开始] 导入 SSL Widget 专用签名身份\n'
 security list-keychains -d user |
@@ -166,14 +179,16 @@ certificate_sha1="$(printf '%s\n' "${identity_lines}" | awk '{print $2}')"
   fail '证书指纹与仓库固定配置不一致'
 printf '[通过] 签名身份与固定指纹一致\n'
 
-printf '[开始] 先签 Widget 与独立助手，再签宿主 App\n'
+printf '[开始] 先签 Widget，再签宿主 App\n'
 codesign --force --sign "${certificate_sha1}" \
   --identifier "${widget_identifier}" \
   --entitlements "${project_root}/PoC/WidgetSharing/Widget/Widget.entitlements" \
   --options runtime --timestamp=none "${widget_path}"
-codesign --force --sign "${certificate_sha1}" \
-  --identifier "${helper_identifier}" \
-  --options runtime --timestamp=none "${helper_path}"
+if [[ "${diagnostic_without_helper}" == false ]]; then
+  codesign --force --sign "${certificate_sha1}" \
+    --identifier "${helper_identifier}" \
+    --options runtime --timestamp=none "${helper_path}"
+fi
 codesign --force --sign "${certificate_sha1}" \
   --identifier "${app_identifier}" \
   --entitlements "${project_root}/PoC/WidgetSharing/App/App.entitlements" \
@@ -184,11 +199,15 @@ codesign --verify --deep --strict --verbose=2 "${app_path}"
   fail '宿主 Bundle ID 不匹配'
 [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "${widget_path}/Contents/Info.plist")" == "${widget_identifier}" ]] ||
   fail 'Widget Bundle ID 不匹配'
-[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "${helper_path}/Contents/Info.plist")" == "${helper_identifier}" ]] ||
-  fail '升级修复助手 Bundle ID 不匹配'
-[[ "$(/usr/libexec/PlistBuddy -c 'Print :LSBackgroundOnly' "${helper_path}/Contents/Info.plist")" == true ]] ||
-  fail '升级修复助手必须为后台应用'
-for bundle in "${widget_path}" "${helper_path}"; do
+embedded_bundles=("${widget_path}")
+if [[ "${diagnostic_without_helper}" == false ]]; then
+  [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "${helper_path}/Contents/Info.plist")" == "${helper_identifier}" ]] ||
+    fail '升级修复助手 Bundle ID 不匹配'
+  [[ "$(/usr/libexec/PlistBuddy -c 'Print :LSBackgroundOnly' "${helper_path}/Contents/Info.plist")" == true ]] ||
+    fail '升级修复助手必须为后台应用'
+  embedded_bundles+=("${helper_path}")
+fi
+for bundle in "${embedded_bundles[@]}"; do
   [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "${bundle}/Contents/Info.plist")" == "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "${app_path}/Contents/Info.plist")" ]] ||
     fail '嵌入组件与宿主构建号不一致'
 done
@@ -205,9 +224,11 @@ for entitlement_file in "${work_directory}/signed-app-entitlements.plist" "${wor
     fail '文件桥接 PoC 不应声明 App Group'
   fi
 done
-if codesign -d --entitlements :- "${helper_path}" >"${work_directory}/signed-helper-entitlements.plist" 2>/dev/null; then
-  if /usr/libexec/PlistBuddy -c 'Print :com.apple.security.app-sandbox' "${work_directory}/signed-helper-entitlements.plist" >/dev/null 2>&1; then
-    fail '独立修复助手不能继承宿主沙盒'
+if [[ "${diagnostic_without_helper}" == false ]]; then
+  if codesign -d --entitlements :- "${helper_path}" >"${work_directory}/signed-helper-entitlements.plist" 2>/dev/null; then
+    if /usr/libexec/PlistBuddy -c 'Print :com.apple.security.app-sandbox' "${work_directory}/signed-helper-entitlements.plist" >/dev/null 2>&1; then
+      fail '独立修复助手不能继承宿主沙盒'
+    fi
   fi
 fi
 app_access="$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.temporary-exception.files.home-relative-path.read-write:0' "${work_directory}/signed-app-entitlements.plist")"
@@ -229,7 +250,8 @@ if /usr/libexec/PlistBuddy -c 'Print :com.apple.security.temporary-exception.fil
   fail '宿主签名产物包含冗余只读文件例外'
 fi
 
-for signed_bundle in "${app_path}" "${widget_path}" "${helper_path}"; do
+signed_bundles=("${app_path}" "${embedded_bundles[@]}")
+for signed_bundle in "${signed_bundles[@]}"; do
   requirement="$(codesign -dr - "${signed_bundle}" 2>&1)"
   leaf_sha1="$(sed -nE 's/.*certificate leaf = H"([[:xdigit:]]{40})".*/\1/p' <<<"${requirement}")"
   [[ "${leaf_sha1}" == "$(printf '%s' "${certificate_sha1}" | tr '[:upper:]' '[:lower:]')" ]] ||
@@ -252,22 +274,38 @@ mounted=1
 codesign --verify --deep --strict --verbose=2 "${mount_point}/WidgetSharingPoC.app"
 [[ -d "${mount_point}/WidgetSharingPoC.app/Contents/PlugIns/WidgetSharingPoCWidget.appex" ]] ||
   fail 'DMG 内缺少 Widget 扩展'
-[[ -d "${mount_point}/WidgetSharingPoC.app/Contents/Helpers/WidgetSharingRepairHelper.app" ]] ||
-  fail 'DMG 内缺少升级修复助手'
+if [[ "${diagnostic_without_helper}" == true ]]; then
+  [[ ! -e "${mount_point}/WidgetSharingPoC.app/Contents/Helpers/WidgetSharingRepairHelper.app" ]] ||
+    fail '诊断 DMG 内仍含升级修复助手'
+else
+  [[ -d "${mount_point}/WidgetSharingPoC.app/Contents/Helpers/WidgetSharingRepairHelper.app" ]] ||
+    fail 'DMG 内缺少升级修复助手'
+fi
 hdiutil detach "${mount_point}"
 mounted=0
 
 (cd "${output_directory}" && shasum -a 256 widget-sharing-poc.dmg >SHA256SUMS)
+if [[ "${diagnostic_without_helper}" == true ]]; then
+  helper_status='未嵌入；仅供 Finder 覆盖诊断，先不要启动宿主'
+  static_result='同证书签名、嵌入扩展、不含助手、签名权限、DMG 内签名和 SHA-256 均已核验'
+  unverified='用户覆盖安装、原桌面组件位置、系统扩展登记与回执运行态'
+else
+  helper_status="已嵌入：${helper_identifier}"
+  static_result='同证书签名、嵌入扩展与助手、构建号、签名权限、DMG 内签名和 SHA-256 均已核验'
+  unverified='用户安装、助手首次启动、旧版扩展定点退出、系统小组件显示与新回执运行态'
+fi
 cat >"${report_path}" <<EOF
 验证对象：SSL Widget 独立假数据 PoC
+源码提交：${GITHUB_SHA:-未知}
+无助手诊断开关：${diagnostic_without_helper}
 宿主 Bundle ID：${app_identifier}
 Widget Bundle ID：${widget_identifier}
-修复助手 Bundle ID：${helper_identifier}
+修复助手：${helper_status}
 共享目录：~${shared_path}
 签名证书：${signing_identity}
 叶证书 SHA-1 前 12 位：${certificate_sha1:0:12}
-权限：宿主专用目录读写，Widget 仅 config/ 只读及 state/ 读写；宿主与 Widget 保留沙盒，独立修复助手不使用沙盒；无 App Group
-静态结果：同证书签名、嵌入扩展与助手、构建号、签名权限、DMG 内签名和 SHA-256 均已核验
-未验证：用户安装、助手首次启动、旧版扩展定点退出、系统小组件显示与新回执运行态
+权限：宿主专用目录读写，Widget 仅 config/ 只读及 state/ 读写；宿主与 Widget 保留沙盒；无 App Group
+静态结果：${static_result}
+未验证：${unverified}
 EOF
 printf '[通过] 候选 DMG、静态报告及校验和位于 dist/\n'

@@ -2,6 +2,11 @@ name: SSL 小组件文件共享签名 PoC
 
 on:
   workflow_dispatch:
+    inputs:
+      diagnostic_without_helper:
+        description: '诊断包：不嵌入修复助手，仅验证 Finder 覆盖后的原组件位置'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -49,6 +54,7 @@ jobs:
           SSL_WIDGET_SIGNING_P12_BASE64: ${{ secrets.SSL_WIDGET_SIGNING_P12_BASE64 }}
           SSL_WIDGET_SIGNING_P12_PASSWORD: ${{ secrets.SSL_WIDGET_SIGNING_P12_PASSWORD }}
           SSL_WIDGET_SIGNING_CERT_SHA1: ${{ vars.SSL_WIDGET_SIGNING_CERT_SHA1 }}
+          WIDGET_SHARING_DIAGNOSTIC_WITHOUT_HELPER: ${{ inputs.diagnostic_without_helper }}
         run: bash scripts/package-widget-sharing-poc.sh
 
       - name: 上传候选 DMG 与静态核验结果
