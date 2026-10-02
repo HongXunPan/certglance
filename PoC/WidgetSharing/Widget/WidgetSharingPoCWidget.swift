@@ -74,7 +74,7 @@ private struct WidgetSharingPoCView: View {
         .foregroundStyle(.secondary)
         .lineLimit(1)
       Spacer(minLength: 0)
-      Text("仅假数据 · 版本 4")
+      Text("仅假数据 · 版本 \(WidgetSharingPoCIdentity.currentBuildVersion)")
         .font(.caption2)
         .foregroundStyle(.secondary)
     }
