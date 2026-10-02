@@ -46,6 +46,8 @@ signing_identity='SSL Widget By HongXunPan'
 app_identifier='com.HongXunPan.SSLWidget.WidgetSharingPoC'
 widget_identifier="${app_identifier}.Widget"
 shared_path='/Library/Application Support/com.HongXunPan.SSLWidget.WidgetSharingPoC/'
+config_path="${shared_path}config/"
+state_path="${shared_path}state/"
 mounted=0
 keychain_created=0
 
@@ -186,11 +188,22 @@ for entitlement_file in "${work_directory}/signed-app-entitlements.plist" "${wor
   fi
 done
 app_access="$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.temporary-exception.files.home-relative-path.read-write:0' "${work_directory}/signed-app-entitlements.plist")"
-widget_access="$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.temporary-exception.files.home-relative-path.read-only:0' "${work_directory}/signed-widget-entitlements.plist")"
-[[ "${app_access}" == "${shared_path}" && "${widget_access}" == "${shared_path}" ]] ||
-  fail '宿主读写与 Widget 只读路径不一致'
-if /usr/libexec/PlistBuddy -c 'Print :com.apple.security.temporary-exception.files.home-relative-path.read-write' "${work_directory}/signed-widget-entitlements.plist" >/dev/null 2>&1; then
-  fail 'Widget 不应获得读写权限'
+widget_config_access="$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.temporary-exception.files.home-relative-path.read-only:0' "${work_directory}/signed-widget-entitlements.plist")"
+widget_state_access="$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.temporary-exception.files.home-relative-path.read-write:0' "${work_directory}/signed-widget-entitlements.plist")"
+[[ "${app_access}" == "${shared_path}" && "${widget_config_access}" == "${config_path}" && "${widget_state_access}" == "${state_path}" ]] ||
+  fail '签名产物的宿主、Widget 请求和回执目录权限不匹配'
+for scope in \
+  "${work_directory}/signed-app-entitlements.plist:com.apple.security.temporary-exception.files.home-relative-path.read-write" \
+  "${work_directory}/signed-widget-entitlements.plist:com.apple.security.temporary-exception.files.home-relative-path.read-only" \
+  "${work_directory}/signed-widget-entitlements.plist:com.apple.security.temporary-exception.files.home-relative-path.read-write"; do
+  entitlement_file="${scope%%:*}"
+  entitlement_key="${scope#*:}"
+  if /usr/libexec/PlistBuddy -c "Print :${entitlement_key}:1" "${entitlement_file}" >/dev/null 2>&1; then
+    fail '签名产物包含额外文件例外目录'
+  fi
+done
+if /usr/libexec/PlistBuddy -c 'Print :com.apple.security.temporary-exception.files.home-relative-path.read-only' "${work_directory}/signed-app-entitlements.plist" >/dev/null 2>&1; then
+  fail '宿主签名产物包含冗余只读文件例外'
 fi
 
 for signed_bundle in "${app_path}" "${widget_path}"; do
@@ -227,8 +240,8 @@ Widget Bundle ID：${widget_identifier}
 共享目录：~${shared_path}
 签名证书：${signing_identity}
 叶证书 SHA-1 前 12 位：${certificate_sha1:0:12}
-权限：宿主专用目录读写，Widget 同目录只读；两端均保留沙盒且无 App Group
+权限：宿主专用目录读写，Widget 仅 config/ 只读及 state/ 读写；两端均保留沙盒且无 App Group
 静态结果：同证书签名、嵌入扩展、签名权限、DMG 内签名和 SHA-256 均已核验
-未验证：用户安装、系统小组件图库可见性、文件访问与刷新运行态
+未验证：用户安装、系统小组件图库可见性、请求读取与回执写回运行态
 EOF
 printf '[通过] 候选 DMG、静态报告及校验和位于 dist/\n'

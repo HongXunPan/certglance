@@ -3,7 +3,7 @@ import WidgetKit
 
 @main
 struct WidgetSharingPoCApp: App {
-  @State private var result = "尚未写入假数据"
+  @State private var result = "尚未写入假请求"
 
   var body: some Scene {
     WindowGroup("SSL 小组件共享验证") {
@@ -12,24 +12,29 @@ struct WidgetSharingPoCApp: App {
           .font(.headline)
         Text(result)
           .textSelection(.enabled)
-        Button("写入新假标记") {
-          writeMarker()
+        HStack {
+          Button("写入新假请求") {
+            writeRequest()
+          }
+          Button("读取组件回执") {
+            result = WidgetSharingPoCDiagnostics.inspect().fullText
+          }
         }
       }
       .padding(24)
-      .frame(minWidth: 380)
+      .frame(minWidth: 420)
     }
   }
 
   @MainActor
-  private func writeMarker() {
+  private func writeRequest() {
     do {
-      let marker = try WidgetSharingPoCFile.writeNewMarker()
-      result = "写入标记：\(marker)\n\(WidgetSharingPoCDiagnostics.inspect().fullText)"
+      let marker = try WidgetSharingPoCFile.writeNewRequest()
+      result = "已写入新请求：\(marker)\n\(WidgetSharingPoCDiagnostics.inspect().fullText)"
       WidgetCenter.shared.reloadTimelines(ofKind: WidgetSharingPoCIdentity.widgetKind)
     } catch {
       result =
-        "写入失败：\(WidgetSharingPoCDiagnostics.errorCode(error))\n"
+        "请求写入失败：\(WidgetSharingPoCDiagnostics.errorCode(error))\n"
         + WidgetSharingPoCDiagnostics.inspect().fullText
     }
   }

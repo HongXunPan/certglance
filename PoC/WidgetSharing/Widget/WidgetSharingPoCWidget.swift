@@ -12,8 +12,9 @@ private struct WidgetSharingPoCProvider: TimelineProvider {
       date: .now,
       inspection: WidgetSharingPoCInspection(
         status: "等待宿主写入",
-        value: "尚无假标记",
-        readSucceeded: false,
+        value: "尚无假请求",
+        requestMarker: "无",
+        receiptMatched: false,
         location: "未知",
         directoryFingerprint: "未知",
         filePresence: "未知"
@@ -25,21 +26,24 @@ private struct WidgetSharingPoCProvider: TimelineProvider {
     in context: Context,
     completion: @escaping (WidgetSharingPoCEntry) -> Void
   ) {
-    completion(makeEntry())
+    completion(makeEntry(writeReceipt: false))
   }
 
   func getTimeline(
     in context: Context,
     completion: @escaping (Timeline<WidgetSharingPoCEntry>) -> Void
   ) {
-    let entry = makeEntry()
+    let entry = makeEntry(writeReceipt: true)
     completion(
       Timeline(entries: [entry], policy: .after(entry.date.addingTimeInterval(15 * 60)))
     )
   }
 
-  private func makeEntry() -> WidgetSharingPoCEntry {
-    WidgetSharingPoCEntry(date: .now, inspection: WidgetSharingPoCDiagnostics.inspect())
+  private func makeEntry(writeReceipt: Bool) -> WidgetSharingPoCEntry {
+    WidgetSharingPoCEntry(
+      date: .now,
+      inspection: WidgetSharingPoCDiagnostics.inspect(writeReceipt: writeReceipt)
+    )
   }
 }
 
@@ -55,28 +59,28 @@ private struct WidgetSharingPoCView: View {
         .foregroundStyle(.secondary)
       Text(entry.inspection.value)
         .font(
-          entry.inspection.readSucceeded
+          entry.inspection.receiptMatched
             ? .system(.title3, design: .monospaced).weight(.semibold) : .caption2
         )
-        .lineLimit(entry.inspection.readSucceeded ? 1 : 2)
+        .lineLimit(entry.inspection.receiptMatched ? 1 : 2)
         .minimumScaleFactor(0.75)
-      Text("位置：\(entry.inspection.location)")
+      Text("请求：\(entry.inspection.requestMarker)")
         .font(.caption2)
         .foregroundStyle(.secondary)
         .lineLimit(1)
-        .minimumScaleFactor(0.75)
       Text("目录：\(entry.inspection.directoryFingerprint)")
         .font(.caption2)
         .foregroundStyle(.secondary)
         .lineLimit(1)
       Spacer(minLength: 0)
-      Text("仅假数据 · 版本 2")
+      Text("仅假数据 · 版本 3")
         .font(.caption2)
         .foregroundStyle(.secondary)
     }
     .padding()
     .containerBackground(.background, for: .widget)
     .accessibilityElement(children: .combine)
+    .accessibilityLabel(entry.inspection.fullText)
   }
 }
 
@@ -90,7 +94,7 @@ struct WidgetSharingPoCWidget: Widget {
       WidgetSharingPoCView(entry: entry)
     }
     .configurationDisplayName("SSL 共享验证")
-    .description("验证自签名小组件能否读取宿主写入的假数据。")
+    .description("验证自签名小组件读入假请求并写回假回执。")
     .supportedFamilies([.systemSmall])
   }
 }
