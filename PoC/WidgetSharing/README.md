@@ -1,6 +1,6 @@
 # WidgetKit 自签名专用文件 PoC
 
-此独立工程只使用假数据验证专用文件桥接，不使用 App Group，不读取真实域名或证书，也不修改正式 SSL 证书看板。版本 2 的“宿主写入、Widget 读取”与版本 3 的“宿主写请求、Widget 写回执、宿主回读”均已由用户在自签名安装后验收。版本 3→4 拖拽覆盖时，宿主与包内扩展已是构建 4，但旧扩展进程仍处理新请求；仅请求时间线刷新未使扩展代码更新。定点结束旧扩展进程后，新请求回执携带构建 4，用户确认桌面小组件恢复。该单次实测不代表所有机器都会如此，也不证明正式应用的升级链路。
+此独立工程只使用假数据验证专用文件桥接，不使用 App Group，不读取真实域名或证书，也不修改正式 SSL 证书看板。版本 2 的“宿主写入、Widget 读取”与版本 3 的“宿主写请求、Widget 写回执、宿主回读”均已由用户在自签名安装后验收。版本 3→4、4→5 拖拽覆盖时，磁盘上的宿主与包内扩展已经升级，但旧扩展进程仍处理新请求；仅请求时间线刷新未使扩展代码更新。定点结束旧扩展进程后，新请求回执和桌面小组件才恢复到新构建。版本 6 尝试把该定点修复放到首次启动自动执行；前两次实测不代表所有机器都会如此，也不证明版本 6 或正式应用的升级链路已通过。
 
 ## 验证入口
 
@@ -10,9 +10,11 @@
 ```sh
 plutil -lint PoC/WidgetSharing/WidgetSharingPoC.xcodeproj/project.pbxproj \
   PoC/WidgetSharing/App/Info.plist PoC/WidgetSharing/Widget/Info.plist \
+  PoC/WidgetSharing/Helper/Info.plist \
   PoC/WidgetSharing/App/App.entitlements PoC/WidgetSharing/Widget/Widget.entitlements
 xcrun swift format lint --recursive --strict \
-  PoC/WidgetSharing/App PoC/WidgetSharing/Widget PoC/WidgetSharing/Shared
+  PoC/WidgetSharing/App PoC/WidgetSharing/Widget PoC/WidgetSharing/Shared \
+  PoC/WidgetSharing/Helper
 xcodebuild -project PoC/WidgetSharing/WidgetSharingPoC.xcodeproj \
   -scheme WidgetSharingPoC -configuration Debug -destination 'generic/platform=macOS' \
   -derivedDataPath .build/WidgetSharingPoC CODE_SIGNING_ALLOWED=NO build
@@ -30,7 +32,7 @@ xcodebuild -project PoC/WidgetSharing/WidgetSharingPoC.xcodeproj \
 
 证书显示名称固定为 `SSL Widget By HongXunPan`。只创建一次并离线保存受控备份；不得复用 `Mihomo Meter By HongXunPan`，也不得把 P12、密码、私钥或真实域名数据提交进仓库。配置 Secrets 与触发工作流都属于后续独立步骤。
 
-工作流使用 macOS 26 Runner 无签名构建，再将证书导入临时钥匙串。脚本仅允许在 GitHub 托管 Runner 运行；导入管理员域信任设置前先核对固定指纹，只为该证书增加代码签名用途的信任，并为非交互导入设置 45 秒上限。此设置只作用于本次临时 Runner，不修改本机授权数据库。随后按 Widget → 宿主顺序签名，核对 Bundle ID、沙盒、分目录权限和 DMG 内嵌扩展。产物为 3 天保留的 Artifact，包含 `widget-sharing-poc.dmg`、`widget-sharing-poc-verification.txt` 与 `SHA256SUMS`。解压 Artifact 后，在其目录运行 `shasum -a 256 -c SHA256SUMS` 核对下载文件。静态核验通过只能证明签名和包结构，不能证明系统会注册组件或允许跨进程读写。
+工作流使用 macOS 26 Runner 无签名构建，再将证书导入临时钥匙串。脚本仅允许在 GitHub 托管 Runner 运行；导入管理员域信任设置前先核对固定指纹，只为该证书增加代码签名用途的信任，并为非交互导入设置 45 秒上限。此设置只作用于本次临时 Runner，不修改本机授权数据库。随后按 Widget → 独立修复助手 → 宿主顺序签名，核对三者的 Bundle ID、构建号、专用证书、宿主及 Widget 沙盒、助手非沙盒、分目录权限和 DMG 内嵌结构。助手仅在确认同一请求由旧版扩展处理时启动，不在后台常驻。产物为 3 天保留的 Artifact，包含 `widget-sharing-poc.dmg`、`widget-sharing-poc-verification.txt` 与 `SHA256SUMS`。解压 Artifact 后，在其目录运行 `shasum -a 256 -c SHA256SUMS` 核对下载文件。静态核验通过只能证明签名和包结构，不能证明助手能在用户机器上启动、系统会注册组件或允许跨进程读写。
 
 ## 已完成的版本 3 文件桥接验收
 
@@ -52,7 +54,7 @@ xcodebuild -project PoC/WidgetSharing/WidgetSharingPoC.xcodeproj \
 
 启动检查只在宿主首次运行某构建时发起一次时间线刷新请求，不等待系统调度，不自动重试、不终止 Widget 扩展或系统进程。回执随构建号变化而重写：新扩展即使遇到旧扩展留下的同请求回执，也会写入自己的构建号。版本 4 的拖拽实测已证明，正常刷新不能保证旧扩展进程被替换。
 
-## 版本 5 拖拽升级与定点修复对照（待实机验收）
+## 版本 5 拖拽升级与定点修复对照（已完成单次实机验收）
 
 版本 5 只递增宿主与 Widget 构建号，并将小组件页脚改为读取扩展进程的实际构建号；保持 Bundle ID、Widget kind、文件格式和 DMG 拖拽安装入口不变。父仓的 `scripts/repair-widget-sharing-poc.sh` 是本机 PoC 工具，不进入候选 DMG，也不是正式应用的自动升级机制。
 
@@ -60,6 +62,14 @@ xcodebuild -project PoC/WidgetSharing/WidgetSharingPoC.xcodeproj \
 2. 启动 `/Applications` 中的新宿主，记录自动生成的请求标记。等组件实际执行时间线后，点击“读取组件回执”。若同一请求的回执构建为 `5`、状态“回执匹配”且桌面页脚为“仅假数据 · 版本 5”，记录为本次拖拽直接成功，不运行修复脚本。
 3. 只有在同一请求的回执明确显示构建 `4` 或“未提供”，且桌面仍是旧版时，先在**父仓根目录的普通终端**执行 `bash scripts/repair-widget-sharing-poc.sh 5` 只读预检。确认脚本识别的是已安装构建 5、项目专用签名和当前账户的本项目 Widget 进程后，再人工执行 `bash scripts/repair-widget-sharing-poc.sh 5 --apply`。脚本只向这个精确进程发送 `TERM`，不会更新、删除或重装 App，也不操作系统守护进程；若预检失败或无匹配进程，停止并记录结果，不改用宽泛 `killall`。
 4. 再从 `/Applications` 打开宿主，点击“写入新假请求”，等待 WidgetKit 实际运行并读取回执。**修复通过条件**：新请求回执构建为 `5`、状态“回执匹配”、桌面页脚为版本 5，且原有小组件位置与配置未丢失。脚本成功发送信号不等于上述通过；若仍不匹配，保留现状并报告，不自动重试或移除小组件。
+
+本轮实测中，启动检查写入请求 `BE89A41B` 后，旧扩展给该请求写回构建 `4`，桌面仍显示版本 4；父仓脚本核对安装包、专用签名和当前用户精确扩展进程后，只对该进程发送 `TERM`。后续新请求回执和桌面小组件均恢复为版本 5，用户确认“可以了”。这只证明当前机器上的一次定点修复，不能视为普通用户可用的自动流程。
+
+## 版本 6 首次启动自动修复（待签名包与实机验收）
+
+版本 6 保留原 DMG 拖拽安装入口，宿主和 Widget 仍在沙盒内。新增一个嵌入宿主的短时后台助手应用；它不使用沙盒，只拥有当前用户权限，不请求管理员授权，不常驻，也不进入正式证书看板。只有新版宿主收到**同一请求的旧版扩展回执**时才会启动助手；无回执、回执构建已正确或请求被改写时都不处理进程。助手再次核对当前请求与回执、三者构建号、固定项目专用证书、当前用户和精确的本项目扩展可执行路径；最多对一个匹配进程发送 `TERM`，不处理其他 App 或系统守护进程。宿主随后写入新请求、请求 WidgetKit 刷新，并等候新回执。每个构建自动尝试至多一次，失败或超时只显示状态和“重新检查升级”按钮，不删除数据、不自动反复终止进程。
+
+验收时保留版本 5 桌面小组件，退出旧宿主后拖拽覆盖版本 6，再从 `/Applications` 首次打开新版宿主。分别记录安装包内宿主、Widget、助手的构建号，首次请求与回执构建、是否出现系统安全提示、助手是否实际退出旧进程、二次请求与回执构建，以及桌面页脚是否变为版本 6。**通过条件**是无终端操作、无手动移除小组件、无需点击修复按钮，二次请求回执与桌面页脚均为版本 6；只看到“已启动助手”或“已请求刷新”不算通过。如果助手被 Gatekeeper 或沙盒边界阻断，保留旧组件和数据，记录提示并停止，不全局关闭安全机制或改用宽泛 `killall`。
 
 构建失败先查工程和 SDK；宿主写入失败先查根目录权限；Widget 不出现先查嵌入、签名和系统注册；“请求读取失败”先查 `config/` 只读例外；“回执写入失败”先查 `state/` 读写例外及目录是否由宿主创建；“回执属于旧请求”先查当前 Widget 时间线是否执行。诊断界面仅展示短目录标识、标记与错误域／错误码，不展示完整路径或系统日志。系统日志没有拒绝记录也不能单独证明授权成功。
 

@@ -34,11 +34,13 @@ jobs:
           plutil -lint \
             PoC/WidgetSharing/WidgetSharingPoC.xcodeproj/project.pbxproj \
             PoC/WidgetSharing/App/Info.plist \
+            PoC/WidgetSharing/Helper/Info.plist \
             PoC/WidgetSharing/Widget/Info.plist \
             PoC/WidgetSharing/App/App.entitlements \
             PoC/WidgetSharing/Widget/Widget.entitlements
           xcrun swift format lint --recursive --strict \
             PoC/WidgetSharing/App \
+            PoC/WidgetSharing/Helper \
             PoC/WidgetSharing/Widget \
             PoC/WidgetSharing/Shared
 

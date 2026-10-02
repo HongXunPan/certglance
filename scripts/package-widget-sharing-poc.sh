@@ -14,6 +14,9 @@ for name in SSL_WIDGET_SIGNING_P12_BASE64 SSL_WIDGET_SIGNING_P12_PASSWORD SSL_WI
 done
 [[ "${SSL_WIDGET_SIGNING_CERT_SHA1}" =~ ^[[:xdigit:]]{40}$ ]] ||
   fail '证书 SHA-1 必须是 40 位十六进制字符串'
+helper_signing_sha1='f7b4e6b1573d170587e9139eb1855f90803556a2'
+[[ "$(printf '%s' "${SSL_WIDGET_SIGNING_CERT_SHA1}" | tr '[:upper:]' '[:lower:]')" == "${helper_signing_sha1}" ]] ||
+  fail '签名证书与升级修复助手锁定的项目专用证书不一致'
 
 for command_name in xcodebuild xcrun security codesign hdiutil ditto openssl plutil shasum; do
   command -v "${command_name}" >/dev/null 2>&1 || fail "缺少命令：${command_name}"
@@ -30,6 +33,7 @@ work_directory="$(mktemp -d "${work_parent}/widget-sharing-signing-$(date +%Y%m%
 derived_data="${work_directory}/DerivedData"
 app_path="${derived_data}/Build/Products/Release/WidgetSharingPoC.app"
 widget_path="${app_path}/Contents/PlugIns/WidgetSharingPoCWidget.appex"
+helper_path="${app_path}/Contents/Helpers/WidgetSharingRepairHelper.app"
 keychain_path="${work_directory}/signing.keychain-db"
 certificate_path="${work_directory}/signing.p12"
 certificate_pem_path="${work_directory}/signing.pem"
@@ -45,6 +49,7 @@ checksum_path="${output_directory}/SHA256SUMS"
 signing_identity='SSL Widget By HongXunPan'
 app_identifier='com.HongXunPan.SSLWidget.WidgetSharingPoC'
 widget_identifier="${app_identifier}.Widget"
+helper_identifier="${app_identifier}.RepairHelper"
 shared_path='/Library/Application Support/com.HongXunPan.SSLWidget.WidgetSharingPoC/'
 config_path="${shared_path}config/"
 state_path="${shared_path}state/"
@@ -92,6 +97,8 @@ xcodebuild -quiet \
 [[ -f "${app_path}/Contents/MacOS/WidgetSharingPoC" ]] || fail '缺少宿主可执行文件'
 [[ -f "${widget_path}/Contents/MacOS/WidgetSharingPoCWidget" ]] ||
   fail '缺少嵌入的 Widget 可执行文件'
+[[ -f "${helper_path}/Contents/MacOS/WidgetSharingRepairHelper" ]] ||
+  fail '缺少嵌入的升级修复助手可执行文件'
 
 printf '[开始] 导入 SSL Widget 专用签名身份\n'
 security list-keychains -d user |
@@ -159,11 +166,14 @@ certificate_sha1="$(printf '%s\n' "${identity_lines}" | awk '{print $2}')"
   fail '证书指纹与仓库固定配置不一致'
 printf '[通过] 签名身份与固定指纹一致\n'
 
-printf '[开始] 先签 Widget，再签宿主 App\n'
+printf '[开始] 先签 Widget 与独立助手，再签宿主 App\n'
 codesign --force --sign "${certificate_sha1}" \
   --identifier "${widget_identifier}" \
   --entitlements "${project_root}/PoC/WidgetSharing/Widget/Widget.entitlements" \
   --options runtime --timestamp=none "${widget_path}"
+codesign --force --sign "${certificate_sha1}" \
+  --identifier "${helper_identifier}" \
+  --options runtime --timestamp=none "${helper_path}"
 codesign --force --sign "${certificate_sha1}" \
   --identifier "${app_identifier}" \
   --entitlements "${project_root}/PoC/WidgetSharing/App/App.entitlements" \
@@ -174,6 +184,14 @@ codesign --verify --deep --strict --verbose=2 "${app_path}"
   fail '宿主 Bundle ID 不匹配'
 [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "${widget_path}/Contents/Info.plist")" == "${widget_identifier}" ]] ||
   fail 'Widget Bundle ID 不匹配'
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "${helper_path}/Contents/Info.plist")" == "${helper_identifier}" ]] ||
+  fail '升级修复助手 Bundle ID 不匹配'
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :LSBackgroundOnly' "${helper_path}/Contents/Info.plist")" == true ]] ||
+  fail '升级修复助手必须为后台应用'
+for bundle in "${widget_path}" "${helper_path}"; do
+  [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "${bundle}/Contents/Info.plist")" == "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "${app_path}/Contents/Info.plist")" ]] ||
+    fail '嵌入组件与宿主构建号不一致'
+done
 [[ "$(/usr/libexec/PlistBuddy -c 'Print :NSExtension:NSExtensionPointIdentifier' "${widget_path}/Contents/Info.plist")" == 'com.apple.widgetkit-extension' ]] ||
   fail 'Widget 扩展点不匹配'
 
@@ -187,6 +205,11 @@ for entitlement_file in "${work_directory}/signed-app-entitlements.plist" "${wor
     fail '文件桥接 PoC 不应声明 App Group'
   fi
 done
+if codesign -d --entitlements :- "${helper_path}" >"${work_directory}/signed-helper-entitlements.plist" 2>/dev/null; then
+  if /usr/libexec/PlistBuddy -c 'Print :com.apple.security.app-sandbox' "${work_directory}/signed-helper-entitlements.plist" >/dev/null 2>&1; then
+    fail '独立修复助手不能继承宿主沙盒'
+  fi
+fi
 app_access="$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.temporary-exception.files.home-relative-path.read-write:0' "${work_directory}/signed-app-entitlements.plist")"
 widget_config_access="$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.temporary-exception.files.home-relative-path.read-only:0' "${work_directory}/signed-widget-entitlements.plist")"
 widget_state_access="$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.temporary-exception.files.home-relative-path.read-write:0' "${work_directory}/signed-widget-entitlements.plist")"
@@ -206,7 +229,7 @@ if /usr/libexec/PlistBuddy -c 'Print :com.apple.security.temporary-exception.fil
   fail '宿主签名产物包含冗余只读文件例外'
 fi
 
-for signed_bundle in "${app_path}" "${widget_path}"; do
+for signed_bundle in "${app_path}" "${widget_path}" "${helper_path}"; do
   requirement="$(codesign -dr - "${signed_bundle}" 2>&1)"
   leaf_sha1="$(sed -nE 's/.*certificate leaf = H"([[:xdigit:]]{40})".*/\1/p' <<<"${requirement}")"
   [[ "${leaf_sha1}" == "$(printf '%s' "${certificate_sha1}" | tr '[:upper:]' '[:lower:]')" ]] ||
@@ -229,6 +252,8 @@ mounted=1
 codesign --verify --deep --strict --verbose=2 "${mount_point}/WidgetSharingPoC.app"
 [[ -d "${mount_point}/WidgetSharingPoC.app/Contents/PlugIns/WidgetSharingPoCWidget.appex" ]] ||
   fail 'DMG 内缺少 Widget 扩展'
+[[ -d "${mount_point}/WidgetSharingPoC.app/Contents/Helpers/WidgetSharingRepairHelper.app" ]] ||
+  fail 'DMG 内缺少升级修复助手'
 hdiutil detach "${mount_point}"
 mounted=0
 
@@ -237,11 +262,12 @@ cat >"${report_path}" <<EOF
 验证对象：SSL Widget 独立假数据 PoC
 宿主 Bundle ID：${app_identifier}
 Widget Bundle ID：${widget_identifier}
+修复助手 Bundle ID：${helper_identifier}
 共享目录：~${shared_path}
 签名证书：${signing_identity}
 叶证书 SHA-1 前 12 位：${certificate_sha1:0:12}
-权限：宿主专用目录读写，Widget 仅 config/ 只读及 state/ 读写；两端均保留沙盒且无 App Group
-静态结果：同证书签名、嵌入扩展、签名权限、DMG 内签名和 SHA-256 均已核验
-未验证：用户安装、系统小组件图库可见性、请求读取与回执写回运行态
+权限：宿主专用目录读写，Widget 仅 config/ 只读及 state/ 读写；宿主与 Widget 保留沙盒，独立修复助手不使用沙盒；无 App Group
+静态结果：同证书签名、嵌入扩展与助手、构建号、签名权限、DMG 内签名和 SHA-256 均已核验
+未验证：用户安装、助手首次启动、旧版扩展定点退出、系统小组件显示与新回执运行态
 EOF
 printf '[通过] 候选 DMG、静态报告及校验和位于 dist/\n'
