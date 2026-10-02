@@ -16,6 +16,9 @@ private struct WidgetSharingPoCProvider: TimelineProvider {
         requestMarker: "无",
         receiptMatched: false,
         widgetBuildVersion: nil,
+        installedAppBuildVersion: nil,
+        installedAppReadStatus: nil,
+        observedAt: nil,
         location: "未知",
         directoryFingerprint: "未知",
         filePresence: "未知"
@@ -74,9 +77,11 @@ private struct WidgetSharingPoCView: View {
         .foregroundStyle(.secondary)
         .lineLimit(1)
       Spacer(minLength: 0)
-      Text("仅假数据 · 版本 \(WidgetSharingPoCIdentity.currentBuildVersion)")
+      Text("仅假数据 · \(entry.inspection.versionSummary)")
         .font(.caption2)
         .foregroundStyle(.secondary)
+        .lineLimit(1)
+        .minimumScaleFactor(0.7)
     }
     .padding()
     .containerBackground(.background, for: .widget)

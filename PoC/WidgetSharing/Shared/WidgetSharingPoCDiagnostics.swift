@@ -7,12 +7,20 @@ struct WidgetSharingPoCInspection {
   let requestMarker: String
   let receiptMatched: Bool
   let widgetBuildVersion: String?
+  let installedAppBuildVersion: String?
+  let installedAppReadStatus: String?
+  let observedAt: Date?
   let location: String
   let directoryFingerprint: String
   let filePresence: String
 
   var fullText: String {
-    "\(status)：\(value)\n请求标记：\(requestMarker)\n当前进程构建：\(WidgetSharingPoCIdentity.currentBuildVersion) · 回执构建：\(widgetBuildVersion ?? "未提供")\n位置：\(location) · 目录标识：\(directoryFingerprint)\n\(filePresence)"
+    "\(status)：\(value)\n请求标记：\(requestMarker)\n当前进程构建：\(WidgetSharingPoCIdentity.currentBuildVersion) · 回执构建：\(widgetBuildVersion ?? "未提供")\n回执所见安装构建：\(installedAppBuildVersion ?? "未读取") · 读取状态：\(installedAppReadStatus ?? "未提供")\n回执观测时间：\(observedAt?.formatted(date: .abbreviated, time: .standard) ?? "未提供")\n位置：\(location) · 目录标识：\(directoryFingerprint)\n\(filePresence)"
+  }
+
+  var versionSummary: String {
+    let installed = installedAppBuildVersion ?? (installedAppReadStatus == nil ? "待检查" : "读取失败")
+    return "进程 \(WidgetSharingPoCIdentity.currentBuildVersion) · 安装 \(installed)"
   }
 }
 
@@ -30,7 +38,10 @@ enum WidgetSharingPoCDiagnostics {
         value: String,
         requestMarker: String = "无",
         receiptMatched: Bool = false,
-        widgetBuildVersion: String? = nil
+        widgetBuildVersion: String? = nil,
+        installedAppBuildVersion: String? = nil,
+        installedAppReadStatus: String? = nil,
+        observedAt: Date? = nil
       ) -> WidgetSharingPoCInspection {
         let manager = FileManager.default
         let requestPresence = manager.fileExists(atPath: requestFile.path) ? "存在" : "不存在"
@@ -41,6 +52,9 @@ enum WidgetSharingPoCDiagnostics {
           requestMarker: requestMarker,
           receiptMatched: receiptMatched,
           widgetBuildVersion: widgetBuildVersion,
+          installedAppBuildVersion: installedAppBuildVersion,
+          installedAppReadStatus: installedAppReadStatus,
+          observedAt: observedAt,
           location: location,
           directoryFingerprint: fingerprint,
           filePresence: "请求文件：\(requestPresence) · 回执文件：\(receiptPresence)"
@@ -59,11 +73,22 @@ enum WidgetSharingPoCDiagnostics {
 
       if writeReceipt {
         do {
-          let receipt = try WidgetSharingPoCFile.writeReceipt(for: request)
+          let installedApp = WidgetSharingPoCInstalledAppObservation.read()
+          let receipt = try WidgetSharingPoCFile.writeReceipt(
+            for: request,
+            installedAppBuildVersion: installedApp.buildVersion,
+            installedAppReadStatus: installedApp.readStatus
+          )
           return result(
-            status: "组件写回成功", value: receipt.receiptMarker,
+            status: receipt.installedAppBuildVersion != nil
+              && receipt.installedAppBuildVersion != receipt.widgetBuildVersion
+              ? "安装与进程版本不一致" : "组件写回成功",
+            value: receipt.receiptMarker,
             requestMarker: request, receiptMatched: true,
-            widgetBuildVersion: receipt.widgetBuildVersion
+            widgetBuildVersion: receipt.widgetBuildVersion,
+            installedAppBuildVersion: receipt.installedAppBuildVersion,
+            installedAppReadStatus: receipt.installedAppReadStatus,
+            observedAt: receipt.observedAt
           )
         } catch {
           return result(status: "回执写入失败", value: errorCode(error), requestMarker: request)
@@ -84,7 +109,10 @@ enum WidgetSharingPoCDiagnostics {
           value: receipt.receiptMarker,
           requestMarker: request,
           receiptMatched: requestMatched && buildMatched,
-          widgetBuildVersion: receipt.widgetBuildVersion
+          widgetBuildVersion: receipt.widgetBuildVersion,
+          installedAppBuildVersion: receipt.installedAppBuildVersion,
+          installedAppReadStatus: receipt.installedAppReadStatus,
+          observedAt: receipt.observedAt
         )
       } catch {
         return result(status: "回执读取失败", value: errorCode(error), requestMarker: request)
@@ -96,6 +124,9 @@ enum WidgetSharingPoCDiagnostics {
         requestMarker: "未知",
         receiptMatched: false,
         widgetBuildVersion: nil,
+        installedAppBuildVersion: nil,
+        installedAppReadStatus: nil,
+        observedAt: nil,
         location: "未知",
         directoryFingerprint: "未知",
         filePresence: "未知"

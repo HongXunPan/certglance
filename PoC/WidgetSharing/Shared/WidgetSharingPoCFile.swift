@@ -16,6 +16,9 @@ struct WidgetSharingPoCReceipt: Codable {
   let requestMarker: String
   let receiptMarker: String
   let widgetBuildVersion: String?
+  let installedAppBuildVersion: String?
+  let installedAppReadStatus: String?
+  let observedAt: Date?
 }
 
 enum WidgetSharingPoCFileError: Error {
@@ -77,28 +80,38 @@ enum WidgetSharingPoCFile {
     try String(contentsOf: requestURL(), encoding: .utf8)
   }
 
-  static func writeReceipt(for requestMarker: String) throws -> WidgetSharingPoCReceipt {
+  static func writeReceipt(
+    for requestMarker: String, installedAppBuildVersion: String?, installedAppReadStatus: String
+  ) throws -> WidgetSharingPoCReceipt {
     let file = try receiptURL()
     let buildVersion = WidgetSharingPoCIdentity.currentBuildVersion
+    var receiptMarker = String(UUID().uuidString.prefix(8))
     if FileManager.default.fileExists(atPath: file.path) {
       let existing = try readReceipt()
       if existing.requestMarker == requestMarker,
         existing.widgetBuildVersion == buildVersion
       {
-        return existing
+        receiptMarker = existing.receiptMarker
       }
     }
     let receipt = WidgetSharingPoCReceipt(
       requestMarker: requestMarker,
-      receiptMarker: String(UUID().uuidString.prefix(8)),
-      widgetBuildVersion: buildVersion
+      receiptMarker: receiptMarker,
+      widgetBuildVersion: buildVersion,
+      installedAppBuildVersion: installedAppBuildVersion,
+      installedAppReadStatus: installedAppReadStatus,
+      observedAt: .now
     )
-    try JSONEncoder().encode(receipt).write(to: file, options: .atomic)
+    let encoder = JSONEncoder()
+    encoder.dateEncodingStrategy = .iso8601
+    try encoder.encode(receipt).write(to: file, options: .atomic)
     try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
     return receipt
   }
 
   static func readReceipt() throws -> WidgetSharingPoCReceipt {
-    try JSONDecoder().decode(WidgetSharingPoCReceipt.self, from: Data(contentsOf: receiptURL()))
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .iso8601
+    return try decoder.decode(WidgetSharingPoCReceipt.self, from: Data(contentsOf: receiptURL()))
   }
 }
