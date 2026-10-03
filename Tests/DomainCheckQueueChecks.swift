@@ -96,6 +96,13 @@ struct DomainCheckQueueChecks {
       [domain("z.example", now), domain("a.example", now)],
       snapshots: [hundredDays, sevenDays], at: now)
     expect(cappedSuccess.map(\.hostname) == ["a.example", "z.example"], "成功时间权重不得无限增长")
+    let customPort = WatchedDomain(hostname: "same.example", port: 8443, addedAt: now)
+    let defaultPort = WatchedDomain(hostname: "same.example", addedAt: now)
+    let defaultSnapshot = snapshot(
+      "same.example", checkedAt: now, expiresAt: now.addingTimeInterval(60 * 86_400))
+    let separate = DomainCheckQueue.due(
+      [defaultPort, customPort], snapshots: [defaultSnapshot], at: now)
+    expect(separate.map(\.id) == [customPort.id], "同域名不同端口应独立参与检查队列")
     print("多域名检查队列规则通过")
   }
 

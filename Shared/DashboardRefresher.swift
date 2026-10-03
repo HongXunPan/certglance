@@ -12,12 +12,12 @@ struct DashboardRefresher: Sendable {
       var remaining = domains.makeIterator()
       for _ in 0..<min(maximumConcurrentChecks, domains.count) {
         guard let domain = remaining.next() else { break }
-        group.addTask { await checker.check(domain.hostname) }
+        group.addTask { await checker.check(domain) }
       }
       while let result = await group.next() {
         checked.append(result)
         if let domain = remaining.next() {
-          group.addTask { await checker.check(domain.hostname) }
+          group.addTask { await checker.check(domain) }
         }
       }
     }

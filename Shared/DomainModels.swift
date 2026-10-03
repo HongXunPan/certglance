@@ -2,9 +2,44 @@ import Foundation
 
 struct WatchedDomain: Codable, Hashable, Identifiable, Sendable {
   let hostname: String
+  let port: Int
   let addedAt: Date
 
-  var id: String { hostname }
+  init(hostname: String, port: Int = 443, addedAt: Date) {
+    self.hostname = hostname
+    self.port = port
+    self.addedAt = addedAt
+  }
+
+  private enum CodingKeys: String, CodingKey { case hostname, port, addedAt }
+
+  init(from decoder: Decoder) throws {
+    let values = try decoder.container(keyedBy: CodingKeys.self)
+    hostname = try values.decode(String.self, forKey: .hostname)
+    port = try EndpointIdentity.decodePort(from: values)
+    addedAt = try values.decode(Date.self, forKey: .addedAt)
+  }
+
+  var id: String { EndpointIdentity.key(hostname: hostname, port: port) }
+  var displayName: String { id }
+}
+
+enum EndpointIdentity {
+  static func key(hostname: String, port: Int) -> String {
+    port == 443 ? hostname : "\(hostname):\(port)"
+  }
+
+  static func decodePort<Keys: CodingKey>(
+    from values: KeyedDecodingContainer<Keys>
+  ) throws -> Int where Keys: RawRepresentable, Keys.RawValue == String {
+    guard let key = Keys(rawValue: "port") else { return 443 }
+    let port = try values.decodeIfPresent(Int.self, forKey: key) ?? 443
+    guard (1...65_535).contains(port) else {
+      throw DecodingError.dataCorruptedError(
+        forKey: key, in: values, debugDescription: "HTTPS 端口必须在 1 至 65535 之间")
+    }
+    return port
+  }
 }
 
 enum DomainInputError: LocalizedError {
@@ -14,14 +49,35 @@ enum DomainInputError: LocalizedError {
   var errorDescription: String? {
     switch self {
     case .invalid:
-      return "请输入域名，例如 example.com；不要包含协议、端口或路径。"
+      return "请输入有效域名、域名:端口或 HTTPS 网址；HTTP 网址不能指定端口。"
     case .duplicate:
-      return "这个域名已经在看板中。"
+      return "这个 HTTPS 端点已经在看板中。"
     }
   }
 }
 
 enum DomainInput {
+  static func parseEndpoint(_ input: String) throws -> (hostname: String, port: Int) {
+    let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { throw DomainInputError.invalid }
+    let hasScheme = trimmed.contains("://")
+    let components = URLComponents(string: hasScheme ? trimmed : "https://\(trimmed)")
+    guard let components,
+      let scheme = components.scheme?.lowercased(),
+      scheme == "https" || scheme == "http",
+      components.user == nil, components.password == nil,
+      let host = components.host,
+      !host.isEmpty,
+      scheme == "https" || components.port == nil
+    else {
+      throw DomainInputError.invalid
+    }
+    let hostname = try normalize(host)
+    let port = components.port ?? 443
+    guard (1...65_535).contains(port) else { throw DomainInputError.invalid }
+    return (hostname, port)
+  }
+
   static func normalize(_ input: String) throws -> String {
     let lowered = input.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     let hostname = lowered.hasSuffix(".") ? String(lowered.dropLast()) : lowered
@@ -50,6 +106,7 @@ enum CertificateCheckState: String, Codable, Sendable {
 
 struct CertificateSnapshot: Codable, Identifiable, Sendable {
   let hostname: String
+  let port: Int
   let checkedAt: Date
   let expiresAt: Date?
   let checkState: CertificateCheckState
@@ -59,9 +116,11 @@ struct CertificateSnapshot: Codable, Identifiable, Sendable {
 
   init(
     hostname: String, checkedAt: Date, expiresAt: Date?, checkState: CertificateCheckState,
-    detail: String?, lastSuccessfulCheckAt: Date? = nil, consecutiveFailureCount: Int = 0
+    detail: String?, lastSuccessfulCheckAt: Date? = nil, consecutiveFailureCount: Int = 0,
+    port: Int = 443
   ) {
     self.hostname = hostname
+    self.port = port
     self.checkedAt = checkedAt
     self.expiresAt = expiresAt
     self.checkState = checkState
@@ -71,13 +130,14 @@ struct CertificateSnapshot: Codable, Identifiable, Sendable {
   }
 
   private enum CodingKeys: String, CodingKey {
-    case hostname, checkedAt, expiresAt, checkState, detail
+    case hostname, port, checkedAt, expiresAt, checkState, detail
     case lastSuccessfulCheckAt, consecutiveFailureCount
   }
 
   init(from decoder: Decoder) throws {
     let values = try decoder.container(keyedBy: CodingKeys.self)
     hostname = try values.decode(String.self, forKey: .hostname)
+    port = try EndpointIdentity.decodePort(from: values)
     checkedAt = try values.decode(Date.self, forKey: .checkedAt)
     expiresAt = try values.decodeIfPresent(Date.self, forKey: .expiresAt)
     checkState = try values.decode(CertificateCheckState.self, forKey: .checkState)
@@ -93,7 +153,8 @@ struct CertificateSnapshot: Codable, Identifiable, Sendable {
     consecutiveFailureCount = failures
   }
 
-  var id: String { hostname }
+  var id: String { EndpointIdentity.key(hostname: hostname, port: port) }
+  var displayName: String { id }
 
   func daysRemaining(at date: Date) -> Int? {
     guard let expiresAt else { return nil }
@@ -150,15 +211,15 @@ enum DashboardOrder {
   static func sorted(_ domains: [WatchedDomain], snapshots: [CertificateSnapshot], at date: Date)
     -> [WatchedDomain]
   {
-    let indexed = Dictionary(uniqueKeysWithValues: snapshots.map { ($0.hostname, $0) })
+    let indexed = Dictionary(uniqueKeysWithValues: snapshots.map { ($0.id, $0) })
     return domains.sorted { left, right in
-      let leftSeverity = indexed[left.hostname]?.severity(at: date) ?? .unchecked
-      let rightSeverity = indexed[right.hostname]?.severity(at: date) ?? .unchecked
+      let leftSeverity = indexed[left.id]?.severity(at: date) ?? .unchecked
+      let rightSeverity = indexed[right.id]?.severity(at: date) ?? .unchecked
       if leftSeverity != rightSeverity { return leftSeverity.rawValue < rightSeverity.rawValue }
-      let leftExpiry = indexed[left.hostname]?.expiresAt ?? .distantFuture
-      let rightExpiry = indexed[right.hostname]?.expiresAt ?? .distantFuture
+      let leftExpiry = indexed[left.id]?.expiresAt ?? .distantFuture
+      let rightExpiry = indexed[right.id]?.expiresAt ?? .distantFuture
       if leftExpiry != rightExpiry { return leftExpiry < rightExpiry }
-      return left.hostname < right.hostname
+      return left.id < right.id
     }
   }
 }

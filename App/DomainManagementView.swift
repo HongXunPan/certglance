@@ -6,59 +6,42 @@ struct DomainManagementView: View {
 
   var body: some View {
     VStack(spacing: 0) {
-      VStack(alignment: .leading, spacing: 8) {
-        Text("监控域名")
-          .font(.title2.weight(.semibold))
-        Text("添加 HTTPS 域名，小组件会优先展示最需要处理的证书。")
-          .font(.subheadline)
-          .foregroundStyle(.secondary)
-        HStack(spacing: 10) {
-          TextField("例如 example.com", text: $model.input)
-            .textFieldStyle(.roundedBorder)
-            .onSubmit { Task { await model.addDomain() } }
-            .accessibilityLabel("要添加的域名")
-          Button("添加域名") { Task { await model.addDomain() } }
-            .disabled(model.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        }
-        Text("只需填写域名，不含 https://、端口或路径。")
-          .font(.caption)
-          .foregroundStyle(.secondary)
-      }
-      .padding()
-
-      if let storageError = model.storageError {
-        ContentUnavailableView(
-          "共享数据不可用", systemImage: "externaldrive.badge.exclamationmark",
-          description: Text(storageError))
-      } else if model.domains.isEmpty {
-        ContentUnavailableView(
-          "还没有域名", systemImage: "checkmark.shield",
-          description: Text("添加域名后，证书到期情况会显示在桌面小组件中。"))
-      } else {
-        List {
-          ForEach(DashboardOrder.sorted(model.domains, snapshots: model.snapshots, at: Date())) {
-            domain in
-            domainRow(domain)
+      TimelineView(.periodic(from: .now, by: 3_600)) { context in
+        ScrollView {
+          VStack(alignment: .leading, spacing: 20) {
+            heading
+            if let storageError = model.storageError {
+              ContentUnavailableView(
+                "共享数据不可用", systemImage: "externaldrive.badge.exclamationmark",
+                description: Text(storageError))
+            } else {
+              DashboardSummary(
+                domains: model.domains, snapshots: model.snapshots, date: context.date)
+              inputSection
+              if model.domains.isEmpty {
+                ContentUnavailableView(
+                  "还没有监控端点", systemImage: "checkmark.shield",
+                  description: Text("添加域名或粘贴 HTTPS 网址，证书状态会出现在这里及桌面小组件中。")
+                )
+                .frame(maxWidth: .infinity)
+              } else {
+                cardGrid(at: context.date)
+              }
+            }
           }
+          .padding(20)
+          .frame(maxWidth: 960)
+          .frame(maxWidth: .infinity)
         }
-        .listStyle(.inset)
       }
-
       Divider()
-      HStack(spacing: 12) {
-        Label(model.notificationDescription, systemImage: "bell.badge")
-          .foregroundStyle(.secondary)
-        Spacer()
-        Button("开启通知") { Task { await model.requestNotifications() } }
-          .disabled(model.storageError != nil || model.notificationsEnabled)
-      }
-      .padding()
+      notificationBar
     }
     .toolbar {
       Button {
         Task { await model.refresh() }
       } label: {
-        Label("检查全部域名", systemImage: "arrow.clockwise")
+        Label("检查全部端点", systemImage: "arrow.clockwise")
       }
       .disabled(model.isChecking || model.domains.isEmpty)
     }
@@ -82,80 +65,87 @@ struct DomainManagementView: View {
       Text(model.alertMessage ?? "")
     }
     .confirmationDialog(
-      "移除这个域名？",
+      "移除这个端点？",
       isPresented: Binding(
         get: { domainToRemove != nil },
         set: { if !$0 { domainToRemove = nil } }
       ),
       presenting: domainToRemove
-    ) { hostname in
-      Button("移除 \(hostname)", role: .destructive) {
+    ) { id in
+      Button("移除 \(id)", role: .destructive) {
         domainToRemove = nil
-        Task { await model.removeDomain(hostname) }
+        Task { await model.removeDomain(id) }
       }
       Button("取消", role: .cancel) { domainToRemove = nil }
     } message: { _ in
-      Text("这个域名的检查记录和待发送提醒也会移除。")
+      Text("这个端点的检查记录和待发送提醒也会移除。")
     }
     .task { await model.load() }
   }
 
-  private func domainRow(_ domain: WatchedDomain) -> some View {
-    let snapshot = model.snapshot(for: domain.hostname)
-    let severity = snapshot?.severity(at: Date()) ?? .unchecked
-    return HStack(alignment: .center, spacing: 14) {
-      Image(systemName: severity.symbol)
-        .font(.title3)
-        .foregroundStyle(severity.tint)
-        .frame(width: 28)
-        .accessibilityHidden(true)
-      VStack(alignment: .leading, spacing: 4) {
-        Text(domain.hostname).font(.headline).textSelection(.enabled)
-        if let snapshot {
-          if let detail = snapshot.detail {
-            Text(detail)
-              .font(.subheadline)
-              .foregroundStyle(.secondary)
-              .lineLimit(2)
-            if let expiry = snapshot.expiresAt {
-              Text(
-                "\(snapshot.checkState == .failed ? "上次已知到期日" : "证书到期日")：\(expiry.formatted(date: .abbreviated, time: .omitted))"
-              )
-              .font(.caption)
-              .foregroundStyle(.secondary)
-            }
-          } else if let expiry = snapshot.expiresAt {
-            Text("到期于 \(expiry.formatted(date: .abbreviated, time: .omitted))")
-              .font(.subheadline)
-              .foregroundStyle(.secondary)
-          }
-        } else {
-          Text("等待首次检查").font(.subheadline).foregroundStyle(.secondary)
-        }
-      }
-      Spacer(minLength: 8)
-      VStack(alignment: .trailing, spacing: 3) {
-        Text(severity.label)
-          .font(.callout.weight(.semibold))
-          .foregroundStyle(severity.tint)
-        if let snapshot, snapshot.checkState == .trusted,
-          let days = snapshot.daysRemaining(at: Date()), days > 0
-        {
-          Text("剩余 \(days) 天")
-            .font(.caption.monospacedDigit())
-            .foregroundStyle(.secondary)
-        }
-      }
-      Button(role: .destructive) {
-        domainToRemove = domain.hostname
-      } label: {
-        Image(systemName: "trash")
-      }
-      .buttonStyle(.borderless)
-      .accessibilityLabel("删除 \(domain.hostname)")
-      .help("移除 \(domain.hostname)")
+  private var heading: some View {
+    VStack(alignment: .leading, spacing: 5) {
+      Text("证书总览")
+        .font(.system(.largeTitle, design: .rounded, weight: .bold))
+      Text("监控 \(model.domains.count) 个 HTTPS 端点 · 优先呈现需要处理的证书")
+        .font(.subheadline)
+        .foregroundStyle(.secondary)
     }
-    .padding(.vertical, 8)
-    .accessibilityElement(children: .contain)
+  }
+
+  private var inputSection: some View {
+    VStack(alignment: .leading, spacing: 9) {
+      Text("添加监控")
+        .font(.headline)
+      HStack(spacing: 10) {
+        TextField("域名或 HTTPS 网址", text: $model.input)
+          .textFieldStyle(.roundedBorder)
+          .onSubmit { Task { await model.addDomain() } }
+          .onChange(of: model.input) { _, _ in model.inputError = nil }
+          .accessibilityLabel("要添加的 HTTPS 端点")
+        Button("添加") { Task { await model.addDomain() } }
+          .disabled(model.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+      }
+      if let error = model.inputError {
+        Label(error, systemImage: "exclamationmark.circle")
+          .font(.caption)
+          .foregroundStyle(.red)
+      } else if let endpoint = try? DomainInput.parseEndpoint(model.input) {
+        let id = EndpointIdentity.key(hostname: endpoint.hostname, port: endpoint.port)
+        Label("将检查 HTTPS · \(id)", systemImage: "link")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      } else {
+        Text("支持 example.com、example.com:8443 或带路径的 HTTPS 网址。")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      }
+    }
+    .padding(16)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18))
+  }
+
+  private func cardGrid(at date: Date) -> some View {
+    LazyVGrid(columns: [GridItem(.adaptive(minimum: 230), spacing: 12)], spacing: 12) {
+      ForEach(DashboardOrder.sorted(model.domains, snapshots: model.snapshots, at: date)) {
+        domain in
+        CertificateDashboardCard(
+          domain: domain, snapshot: model.snapshot(for: domain.id), date: date,
+          onRemove: { domainToRemove = domain.id })
+      }
+    }
+  }
+
+  private var notificationBar: some View {
+    HStack(spacing: 12) {
+      Label(model.notificationDescription, systemImage: "bell.badge")
+        .foregroundStyle(.secondary)
+      Spacer()
+      Button("开启通知") { Task { await model.requestNotifications() } }
+        .disabled(model.storageError != nil || model.notificationsEnabled)
+    }
+    .padding(.horizontal, 20)
+    .padding(.vertical, 12)
   }
 }

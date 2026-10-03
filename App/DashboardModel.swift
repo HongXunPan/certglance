@@ -5,6 +5,7 @@ import WidgetKit
 @MainActor
 final class DashboardModel: ObservableObject {
   @Published var input = ""
+  @Published var inputError: String?
   @Published private(set) var domains: [WatchedDomain] = []
   @Published private(set) var snapshots: [CertificateSnapshot] = []
   @Published private(set) var isChecking = false
@@ -44,25 +45,32 @@ final class DashboardModel: ObservableObject {
   func addDomain() async {
     guard let store else { return }
     do {
-      let hostname = try DomainInput.normalize(input)
-      guard !domains.contains(where: { $0.hostname == hostname }) else {
+      let endpoint = try DomainInput.parseEndpoint(input)
+      let domain = WatchedDomain(
+        hostname: endpoint.hostname, port: endpoint.port, addedAt: Date())
+      guard !domains.contains(where: { $0.id == domain.id }) else {
         throw DomainInputError.duplicate
       }
-      let updated = domains + [WatchedDomain(hostname: hostname, addedAt: Date())]
+      let updated = domains + [domain]
       try store.replaceDomains(updated)
       domains = updated
       input = ""
+      inputError = nil
       WidgetCenter.shared.reloadTimelines(ofKind: CertGlanceIdentity.widgetKind)
       await refresh()
     } catch {
-      alertMessage = error.localizedDescription
+      if error is DomainInputError {
+        inputError = error.localizedDescription
+      } else {
+        alertMessage = error.localizedDescription
+      }
     }
   }
 
-  func removeDomain(_ hostname: String) async {
+  func removeDomain(_ id: String) async {
     guard let store else { return }
     do {
-      let updated = domains.filter { $0.hostname != hostname }
+      let updated = domains.filter { $0.id != id }
       try store.replaceDomains(updated)
       let remaining = try store.snapshots()
       domains = updated
@@ -112,8 +120,8 @@ final class DashboardModel: ObservableObject {
     }
   }
 
-  func snapshot(for hostname: String) -> CertificateSnapshot? {
-    snapshots.first { $0.hostname == hostname }
+  func snapshot(for id: String) -> CertificateSnapshot? {
+    snapshots.first { $0.id == id }
   }
 
   private func updateNotificationDescription() async {

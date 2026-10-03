@@ -7,10 +7,10 @@ enum DomainCheckQueue {
   static func due(
     _ domains: [WatchedDomain], snapshots: [CertificateSnapshot], at now: Date
   ) -> [WatchedDomain] {
-    let byHost = Dictionary(uniqueKeysWithValues: snapshots.map { ($0.hostname, $0) })
+    let byHost = Dictionary(uniqueKeysWithValues: snapshots.map { ($0.id, $0) })
     return ordered(
       domains.filter { domain in
-        guard let snapshot = byHost[domain.hostname] else { return true }
+        guard let snapshot = byHost[domain.id] else { return true }
         return now.timeIntervalSince(snapshot.checkedAt) >= minimumCheckInterval
       },
       snapshots: snapshots, at: now)
@@ -19,10 +19,10 @@ enum DomainCheckQueue {
   static func ordered(
     _ domains: [WatchedDomain], snapshots: [CertificateSnapshot], at now: Date
   ) -> [WatchedDomain] {
-    let byHost = Dictionary(uniqueKeysWithValues: snapshots.map { ($0.hostname, $0) })
+    let byHost = Dictionary(uniqueKeysWithValues: snapshots.map { ($0.id, $0) })
     return domains.sorted { left, right in
-      let leftSnapshot = byHost[left.hostname]
-      let rightSnapshot = byHost[right.hostname]
+      let leftSnapshot = byHost[left.id]
+      let rightSnapshot = byHost[right.id]
       let leftTier = tier(for: leftSnapshot, at: now)
       let rightTier = tier(for: rightSnapshot, at: now)
       if leftTier != rightTier { return leftTier > rightTier }
@@ -34,7 +34,7 @@ enum DomainCheckQueue {
       let leftDate = leftSnapshot?.checkedAt ?? left.addedAt
       let rightDate = rightSnapshot?.checkedAt ?? right.addedAt
       if leftDate != rightDate { return leftDate < rightDate }
-      return left.hostname < right.hostname
+      return left.id < right.id
     }
   }
 

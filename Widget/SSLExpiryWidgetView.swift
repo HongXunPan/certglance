@@ -12,8 +12,8 @@ struct SSLExpiryWidgetView: View {
     DashboardOrder.sorted(entry.domains, snapshots: entry.snapshots, at: entry.date)
   }
 
-  private var snapshotByHost: [String: CertificateSnapshot] {
-    Dictionary(uniqueKeysWithValues: entry.snapshots.map { ($0.hostname, $0) })
+  private var snapshotByID: [String: CertificateSnapshot] {
+    Dictionary(uniqueKeysWithValues: entry.snapshots.map { ($0.id, $0) })
   }
 
   var body: some View {
@@ -30,43 +30,48 @@ struct SSLExpiryWidgetView: View {
   }
 
   private func smallContent(_ domain: WatchedDomain) -> some View {
-    let snapshot = snapshotByHost[domain.hostname]
+    let snapshot = snapshotByID[domain.id]
     let severity = snapshot?.severity(at: entry.date) ?? .unchecked
     return VStack(alignment: .leading, spacing: 0) {
       header
-      Spacer(minLength: 8)
-      focusMetric(snapshot, severity: severity)
-      expiryLine(snapshot)
-        .padding(.top, 2)
-      Text(domain.hostname)
-        .font(.headline)
+      Spacer(minLength: 3)
+      HStack(spacing: 8) {
+        CertificateCountdownGauge(snapshot: snapshot, date: entry.date, size: 64)
+        VStack(alignment: .leading, spacing: 3) {
+          Text(severity.label)
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(severity.tint)
+          expiryLine(snapshot)
+        }
+      }
+      Text(domain.displayName)
+        .font(.caption.weight(.semibold))
         .lineLimit(2)
-        .minimumScaleFactor(0.8)
-        .padding(.top, 5)
-      Spacer(minLength: 6)
-      statusLine(severity: severity)
+        .truncationMode(.middle)
+        .padding(.top, 3)
+      Spacer(minLength: 0)
     }
     .accessibilityElement(children: .combine)
     .accessibilityLabel(accessibilityDescription(domain, snapshot: snapshot, severity: severity))
   }
 
   private func mediumContent(_ domain: WatchedDomain) -> some View {
-    let snapshot = snapshotByHost[domain.hostname]
+    let snapshot = snapshotByID[domain.id]
     let severity = snapshot?.severity(at: entry.date) ?? .unchecked
     return VStack(alignment: .leading, spacing: 0) {
       header
       Divider().padding(.vertical, 10)
       HStack(alignment: .top, spacing: 18) {
-        VStack(alignment: .leading, spacing: 0) {
-          focusMetric(snapshot, severity: severity)
-          expiryLine(snapshot)
-            .padding(.top, 2)
-          Text(domain.hostname)
-            .font(.headline)
-            .lineLimit(2)
-            .minimumScaleFactor(0.8)
-            .padding(.top, 5)
-          statusLine(severity: severity).padding(.top, 7)
+        HStack(alignment: .center, spacing: 8) {
+          CertificateCountdownGauge(snapshot: snapshot, date: entry.date, size: 68)
+          VStack(alignment: .leading, spacing: 5) {
+            Text(domain.displayName)
+              .font(.subheadline.weight(.semibold))
+              .lineLimit(2)
+              .truncationMode(.middle)
+            statusLine(severity: severity)
+            expiryLine(snapshot)
+          }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -116,31 +121,6 @@ struct SSLExpiryWidgetView: View {
     }
   }
 
-  private func focusMetric(_ snapshot: CertificateSnapshot?, severity: CertificateSeverity)
-    -> some View
-  {
-    HStack(alignment: .firstTextBaseline, spacing: 4) {
-      if severity == .expired {
-        Text("已过期")
-          .font(.system(size: 32, weight: .bold, design: .rounded))
-      } else if severity == .checkFailed || severity == .untrusted || severity == .unchecked {
-        Image(systemName: severity.symbol)
-          .font(.system(size: 38, weight: .semibold))
-          .accessibilityHidden(true)
-      } else if let snapshot,
-        let days = snapshot.daysRemaining(at: entry.date)
-      {
-        Text("\(days)")
-          .font(.system(size: 46, weight: .bold, design: .rounded).monospacedDigit())
-          .contentTransition(.numericText())
-        Text("天")
-          .font(.title3.weight(.medium))
-      }
-    }
-    .foregroundStyle(severity.tint)
-    .minimumScaleFactor(0.7)
-  }
-
   private func statusLine(severity: CertificateSeverity) -> some View {
     HStack(spacing: 5) {
       Image(systemName: severity.symbol)
@@ -166,14 +146,14 @@ struct SSLExpiryWidgetView: View {
   }
 
   private func compactRow(_ domain: WatchedDomain) -> some View {
-    let snapshot = snapshotByHost[domain.hostname]
+    let snapshot = snapshotByID[domain.id]
     let severity = snapshot?.severity(at: entry.date) ?? .unchecked
     return VStack(alignment: .leading, spacing: 3) {
       HStack(spacing: 6) {
         Image(systemName: severity.symbol)
           .foregroundStyle(severity.tint)
           .accessibilityHidden(true)
-        Text(domain.hostname)
+        Text(domain.displayName)
           .font(.caption.weight(.medium))
           .lineLimit(1)
           .truncationMode(.middle)
@@ -229,6 +209,6 @@ struct SSLExpiryWidgetView: View {
         let label = snapshot?.checkState == .failed ? "上次已知截止于" : "截止于"
         return "，\(label) \($0.formatted(date: .abbreviated, time: .omitted))"
       } ?? ""
-    return "\(updateState)\(domain.hostname)，\(remaining)\(expiry)"
+    return "\(updateState)\(domain.displayName)，\(remaining)\(expiry)"
   }
 }

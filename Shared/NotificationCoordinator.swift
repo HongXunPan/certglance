@@ -27,7 +27,7 @@ struct NotificationCoordinator: Sendable {
     do {
       for snapshot in active {
         guard let expiry = snapshot.expiresAt else { continue }
-        let identifierBase = "\(prefix)\(snapshot.hostname).\(Int(expiry.timeIntervalSince1970))."
+        let identifierBase = "\(prefix)\(snapshot.id).\(Int(expiry.timeIntervalSince1970))."
         for moment in NotificationPolicy.moments(expiresAt: expiry, now: now) {
           let identifier = "\(identifierBase)\(moment.threshold)"
           let action = NotificationPolicy.schedulingAction(
@@ -42,7 +42,7 @@ struct NotificationCoordinator: Sendable {
                 threshold: moment.threshold, date: date))
           case .immediate:
             let stillCurrent = try store.snapshots().contains {
-              $0.hostname == snapshot.hostname && $0.expiresAt == expiry
+              $0.id == snapshot.id && $0.expiresAt == expiry
                 && $0.checkState != .failed
             }
             if !stillCurrent { continue }
@@ -68,7 +68,7 @@ struct NotificationCoordinator: Sendable {
   ) async -> Set<String> {
     let validPrefixes = snapshots.compactMap { snapshot -> String? in
       guard let expiry = snapshot.expiresAt else { return nil }
-      return "\(prefix)\(snapshot.hostname).\(Int(expiry.timeIntervalSince1970))."
+      return "\(prefix)\(snapshot.id).\(Int(expiry.timeIntervalSince1970))."
     }
     let pending = await center.pendingNotificationRequests()
     let obsolete = pending.map(\.identifier).filter { identifier in
@@ -85,8 +85,8 @@ struct NotificationCoordinator: Sendable {
     content.title = threshold == 0 ? "SSL 证书已过期" : "SSL 证书临近到期"
     content.body =
       threshold == 0
-      ? "\(snapshot.hostname) 的证书已过期，请尽快处理。"
-      : "\(snapshot.hostname) 的证书将在 \(threshold) 天内到期。"
+      ? "\(snapshot.displayName) 的证书已过期，请尽快处理。"
+      : "\(snapshot.displayName) 的证书将在 \(threshold) 天内到期。"
     content.sound = .default
     let trigger: UNNotificationTrigger
     if let date {

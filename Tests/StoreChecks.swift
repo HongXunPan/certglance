@@ -82,8 +82,18 @@ struct StoreChecks {
     let migrated = try store.snapshots()
     expect(
       migrated.first?.lastSuccessfulCheckAt == now
-        && migrated.first?.consecutiveFailureCount == 0,
+        && migrated.first?.consecutiveFailureCount == 0 && migrated.first?.port == 443,
       "旧版快照应推断成功时间并补齐失败次数")
+    let alternate = WatchedDomain(hostname: first.hostname, port: 8443, addedAt: now)
+    try store.replaceDomains([first, alternate, second])
+    let alternateSnapshot = CertificateSnapshot(
+      hostname: first.hostname, checkedAt: now.addingTimeInterval(100), expiresAt: expiry,
+      checkState: .trusted, detail: nil, port: 8443)
+    let independent = try store.mergeSnapshots([alternateSnapshot])
+    expect(independent.contains { $0.id == alternate.id }, "同域名不同端口应独立存储")
+    expect(independent.contains { $0.id == first.id }, "自定义端口不得覆盖默认端口")
+    try store.replaceDomains([first, second])
+    expect(try store.snapshots().allSatisfy { $0.port == 443 }, "移除自定义端口只清理该端点")
     let original = root.appendingPathComponent("state/snapshots-original.json")
     try FileManager.default.moveItem(at: snapshotFile, to: original)
     try FileManager.default.createSymbolicLink(at: snapshotFile, withDestinationURL: original)

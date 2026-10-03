@@ -7,8 +7,8 @@ struct SSLWidgetApp: App {
   var body: some Scene {
     Window("CertGlance", id: "main") {
       DomainManagementView(model: model)
-        .frame(minWidth: 520, minHeight: 410)
+        .frame(minWidth: 560, minHeight: 460)
     }
-    .defaultSize(width: 620, height: 520)
+    .defaultSize(width: 760, height: 640)
   }
 }

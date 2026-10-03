@@ -68,19 +68,19 @@ final class FileSnapshotStore: SnapshotStore, @unchecked Sendable {
   }
 
   func snapshots() throws -> [CertificateSnapshot] {
-    let hosts = Set(try domains().map(\.hostname))
+    let hosts = Set(try domains().map(\.id))
     let saved: [CertificateSnapshot] = try read(
       [CertificateSnapshot].self, from: state.appendingPathComponent("snapshots.v1.json"))
-    return saved.filter { hosts.contains($0.hostname) }
+    return saved.filter { hosts.contains($0.id) }
   }
 
   func replaceDomains(_ domains: [WatchedDomain]) throws {
     try withLock {
-      let hosts = Set(domains.map(\.hostname))
+      let hosts = Set(domains.map(\.id))
       let saved: [CertificateSnapshot] = try read(
         [CertificateSnapshot].self, from: state.appendingPathComponent("snapshots.v1.json"))
       try write(
-        saved.filter { hosts.contains($0.hostname) },
+        saved.filter { hosts.contains($0.id) },
         to: state.appendingPathComponent("snapshots.v1.json"))
       try write(domains, to: config.appendingPathComponent("domains.v1.json"))
     }
@@ -88,26 +88,26 @@ final class FileSnapshotStore: SnapshotStore, @unchecked Sendable {
 
   func mergeSnapshots(_ checked: [CertificateSnapshot]) throws -> [CertificateSnapshot] {
     try withLock {
-      let hosts = Set(try domains().map(\.hostname))
+      let hosts = Set(try domains().map(\.id))
       let saved: [CertificateSnapshot] = try read(
         [CertificateSnapshot].self, from: state.appendingPathComponent("snapshots.v1.json"))
-      var byHost = Dictionary(uniqueKeysWithValues: saved.map { ($0.hostname, $0) })
-      for result in checked where hosts.contains(result.hostname) {
-        let old = byHost[result.hostname]
+      var byHost = Dictionary(uniqueKeysWithValues: saved.map { ($0.id, $0) })
+      for result in checked where hosts.contains(result.id) {
+        let old = byHost[result.id]
         if let old, result.checkedAt <= old.checkedAt { continue }
         let succeeded = result.checkState != .failed
         let previousFailures = old?.consecutiveFailureCount ?? 0
         let failureCount =
           succeeded ? 0 : (previousFailures == Int.max ? Int.max : previousFailures + 1)
-        byHost[result.hostname] = CertificateSnapshot(
+        byHost[result.id] = CertificateSnapshot(
           hostname: result.hostname, checkedAt: result.checkedAt,
           expiresAt: result.expiresAt ?? (succeeded ? nil : old?.expiresAt),
           checkState: result.checkState, detail: result.detail,
           lastSuccessfulCheckAt: succeeded ? result.checkedAt : old?.lastSuccessfulCheckAt,
-          consecutiveFailureCount: failureCount)
+          consecutiveFailureCount: failureCount, port: result.port)
       }
-      let merged = byHost.values.filter { hosts.contains($0.hostname) }
-        .sorted { $0.hostname < $1.hostname }
+      let merged = byHost.values.filter { hosts.contains($0.id) }
+        .sorted { $0.id < $1.id }
       try write(merged, to: state.appendingPathComponent("snapshots.v1.json"))
       return merged
     }
