@@ -40,6 +40,7 @@ struct NotificationCoordinator: Sendable {
               makeRequest(
                 identifier: identifier, snapshot: snapshot,
                 threshold: moment.threshold, date: date))
+            try store.addNotificationTokens([identifier])
           case .immediate:
             let stillCurrent = try store.snapshots().contains {
               $0.id == snapshot.id && $0.expiresAt == expiry
@@ -52,7 +53,9 @@ struct NotificationCoordinator: Sendable {
                 threshold: moment.threshold, date: nil))
             try store.addNotificationTokens([identifier])
           case .skip:
-            break
+            if pendingIdentifiers.contains(identifier) && !tokens.contains(identifier) {
+              try store.addNotificationTokens([identifier])
+            }
           }
         }
       }

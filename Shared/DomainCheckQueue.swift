@@ -1,5 +1,25 @@
 import Foundation
 
+enum DashboardRefreshSelection: Sendable {
+  case due
+  case all
+  case endpoint(String)
+
+  func ordered(
+    _ domains: [WatchedDomain], snapshots: [CertificateSnapshot], at now: Date
+  ) -> [WatchedDomain] {
+    switch self {
+    case .due:
+      return DomainCheckQueue.due(domains, snapshots: snapshots, at: now)
+    case .all:
+      return DomainCheckQueue.ordered(domains, snapshots: snapshots, at: now)
+    case .endpoint(let id):
+      return DomainCheckQueue.ordered(
+        domains.filter { $0.id == id }, snapshots: snapshots, at: now)
+    }
+  }
+}
+
 enum DomainCheckQueue {
   static let minimumCheckInterval: TimeInterval = 12 * 3_600
   static let overdueInterval: TimeInterval = 24 * 3_600

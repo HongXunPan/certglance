@@ -103,12 +103,21 @@ struct ModelChecks {
       "未排程的未来提醒应保留原触发日期")
     expect(
       NotificationPolicy.schedulingAction(
+        for: future[0], alreadyPending: false, tokenRecorded: true)
+        == .future(future[0].date!),
+      "未来提醒丢失待投递请求时应允许按原日期恢复")
+    expect(
+      NotificationPolicy.schedulingAction(
         for: withinSeven[0], alreadyPending: false, tokenRecorded: false) == .immediate,
       "刚进入提醒窗口时应立即提醒")
     expect(
       NotificationPolicy.schedulingAction(
         for: withinSeven[0], alreadyPending: true, tokenRecorded: false) == .skip,
       "已在待投递队列中的即时提醒不得重复安排")
+    expect(
+      NotificationPolicy.schedulingAction(
+        for: withinSeven[0], alreadyPending: false, tokenRecorded: true) == .skip,
+      "未来提醒投递后再次同步不得对同一档位即时重复提醒")
     print("模型定点检查通过")
   }
 

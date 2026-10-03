@@ -103,6 +103,15 @@ struct DomainCheckQueueChecks {
     let separate = DomainCheckQueue.due(
       [defaultPort, customPort], snapshots: [defaultSnapshot], at: now)
     expect(separate.map(\.id) == [customPort.id], "同域名不同端口应独立参与检查队列")
+    let launchQueue = DashboardRefreshSelection.due.ordered(
+      [defaultPort, customPort], snapshots: [defaultSnapshot], at: now)
+    expect(launchQueue.map(\.id) == [customPort.id], "启动只应检查已到期或未检查端点")
+    let addedQueue = DashboardRefreshSelection.endpoint(defaultPort.id).ordered(
+      [defaultPort, customPort], snapshots: [defaultSnapshot], at: now)
+    expect(addedQueue.map(\.id) == [defaultPort.id], "新增端点只应触发该端点检查")
+    let manualQueue = DashboardRefreshSelection.all.ordered(
+      [defaultPort, customPort], snapshots: [defaultSnapshot], at: now)
+    expect(Set(manualQueue.map(\.id)) == [defaultPort.id, customPort.id], "手动刷新应检查全部端点")
     print("多域名检查队列规则通过")
   }
 

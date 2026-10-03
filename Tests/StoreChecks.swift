@@ -111,7 +111,14 @@ struct StoreChecks {
     let config = root.appendingPathComponent("config/domains.v1.json")
     try Data("无效数据".utf8).write(to: config, options: .atomic)
     expect((try? store.domains()) == nil, "损坏的数据不能静默当作空列表")
+    let snapshotsBeforeRejectedWrite = try Data(contentsOf: snapshotFile)
+    expect(
+      (try? store.replaceDomains([alternate])) == nil,
+      "配置损坏时不得通过添加或移除端点覆盖旧文件")
     expect(try Data(contentsOf: config) == Data("无效数据".utf8), "损坏数据必须留存以便恢复")
+    expect(
+      try Data(contentsOf: snapshotFile) == snapshotsBeforeRejectedWrite,
+      "拒绝覆盖损坏配置时也不得清理旧快照")
     print("文件共享仓储定点检查通过")
   }
 

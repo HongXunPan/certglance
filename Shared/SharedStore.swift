@@ -20,7 +20,7 @@ enum SharedStoreError: LocalizedError {
     case .unavailable:
       return "共享数据不可用。请打开 CertGlance 检查安装与数据目录。"
     case .corrupted:
-      return "共享数据无法读取。原文件已保留，请勿重复添加域名。"
+      return "共享数据无法读取。原文件已保留；请先修复或恢复文件，再重新读取。"
     case .unsafePath:
       return "共享目录包含不安全的文件链接，请检查数据目录后重试。"
     }
@@ -76,6 +76,8 @@ final class FileSnapshotStore: SnapshotStore, @unchecked Sendable {
 
   func replaceDomains(_ domains: [WatchedDomain]) throws {
     try withLock {
+      // 写入前确认旧配置可读，避免把损坏文件误当作空列表覆盖。
+      _ = try read([WatchedDomain].self, from: config.appendingPathComponent("domains.v1.json"))
       let hosts = Set(domains.map(\.id))
       let saved: [CertificateSnapshot] = try read(
         [CertificateSnapshot].self, from: state.appendingPathComponent("snapshots.v1.json"))

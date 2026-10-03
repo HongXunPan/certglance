@@ -6,6 +6,7 @@ struct SSLExpiryEntry: TimelineEntry, Sendable {
   let domains: [WatchedDomain]
   let snapshots: [CertificateSnapshot]
   let errorMessage: String?
+  let reminderErrorMessage: String?
 }
 
 struct SSLExpiryProvider: TimelineProvider {
@@ -20,7 +21,7 @@ struct SSLExpiryProvider: TimelineProvider {
           checkState: .trusted, detail: nil,
           validFrom: .now.addingTimeInterval(-84 * 86_400))
       ],
-      errorMessage: nil
+      errorMessage: nil, reminderErrorMessage: nil
     )
   }
 
@@ -38,28 +39,43 @@ struct SSLExpiryProvider: TimelineProvider {
         let domains = try store.domains()
         let snapshots = try store.snapshots()
         let due = DomainCheckQueue.due(domains, snapshots: snapshots, at: .now)
+        var refreshError: String?
         if !due.isEmpty {
-          _ = try await DashboardRefresher().refresh(
-            Array(due.prefix(WidgetPlanning.maximumChecksPerTimeline)), store: store)
-          try await NotificationCoordinator().synchronize(store: store)
+          do {
+            _ = try await DashboardRefresher().refresh(
+              Array(due.prefix(WidgetPlanning.maximumChecksPerTimeline)), store: store)
+          } catch {
+            refreshError = error.localizedDescription
+          }
         }
         let currentDomains = try store.domains()
         let currentSnapshots = try store.snapshots()
+        var reminderError: String?
+        if !due.isEmpty {
+          do {
+            try await NotificationCoordinator().synchronize(store: store)
+          } catch {
+            reminderError = error.localizedDescription
+          }
+        }
         entry = SSLExpiryEntry(
-          date: .now, domains: currentDomains, snapshots: currentSnapshots, errorMessage: nil)
+          date: .now, domains: currentDomains, snapshots: currentSnapshots,
+          errorMessage: refreshError, reminderErrorMessage: reminderError)
         if !DomainCheckQueue.due(currentDomains, snapshots: currentSnapshots, at: .now).isEmpty {
           reloadInterval = WidgetPlanning.catchUpInterval
         }
       } catch {
         entry = SSLExpiryEntry(
           date: .now, domains: entry.domains,
-          snapshots: entry.snapshots, errorMessage: error.localizedDescription)
+          snapshots: entry.snapshots, errorMessage: error.localizedDescription,
+          reminderErrorMessage: nil)
       }
       let now = Date()
       let entries = WidgetPlanning.timelineDates(snapshots: entry.snapshots, from: now).map {
         SSLExpiryEntry(
           date: $0, domains: entry.domains,
-          snapshots: entry.snapshots, errorMessage: entry.errorMessage)
+          snapshots: entry.snapshots, errorMessage: entry.errorMessage,
+          reminderErrorMessage: entry.reminderErrorMessage)
       }
       reply.complete(
         Timeline(entries: entries, policy: .after(now.addingTimeInterval(reloadInterval))))
@@ -71,11 +87,11 @@ struct SSLExpiryProvider: TimelineProvider {
       let store = try FileSnapshotStore(createIfNeeded: false)
       return SSLExpiryEntry(
         date: .now, domains: try store.domains(),
-        snapshots: try store.snapshots(), errorMessage: nil)
+        snapshots: try store.snapshots(), errorMessage: nil, reminderErrorMessage: nil)
     } catch {
       return SSLExpiryEntry(
         date: .now, domains: [], snapshots: [],
-        errorMessage: error.localizedDescription)
+        errorMessage: error.localizedDescription, reminderErrorMessage: nil)
     }
   }
 }
