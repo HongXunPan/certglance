@@ -85,7 +85,9 @@ final class DashboardModel: ObservableObject {
     repeat {
       refreshRequested = false
       do {
-        _ = try await refresher.refresh(domains, store: store)
+        let queue = DomainCheckQueue.ordered(
+          domains, snapshots: try store.snapshots(), at: .now)
+        _ = try await refresher.refresh(queue, store: store)
         snapshots = try store.snapshots()
         WidgetCenter.shared.reloadTimelines(ofKind: CertGlanceIdentity.widgetKind)
         try await notifications.synchronize(store: store)

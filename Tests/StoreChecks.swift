@@ -33,6 +33,9 @@ struct StoreChecks {
       expiresAt: now.addingTimeInterval(60 * 86_400), checkState: .trusted, detail: nil)
     let initial = try store.mergeSnapshots([trusted, other])
     expect(initial.count == 2, "证书快照应合并写入")
+    expect(
+      initial.first?.lastSuccessfulCheckAt == now && initial.first?.consecutiveFailureCount == 0,
+      "成功读取证书应记录成功时间并清零连续失败")
 
     let failed = CertificateSnapshot(
       hostname: first.hostname, checkedAt: now.addingTimeInterval(10),
@@ -40,8 +43,27 @@ struct StoreChecks {
     let afterFailure = try store.mergeSnapshots([failed])
     expect(afterFailure.first?.checkState == .failed, "失败不能被旧成功状态覆盖")
     expect(afterFailure.first?.expiresAt == expiry, "失败应保留已知截止时间")
+    expect(
+      afterFailure.first?.lastSuccessfulCheckAt == now
+        && afterFailure.first?.consecutiveFailureCount == 1,
+      "失败应保留最近成功时间并累计一次")
+    let afterDuplicate = try store.mergeSnapshots([failed])
+    expect(afterDuplicate.first?.consecutiveFailureCount == 1, "重复合并同一失败不得重复计数")
+    let failedAgain = CertificateSnapshot(
+      hostname: first.hostname, checkedAt: now.addingTimeInterval(20),
+      expiresAt: nil, checkState: .failed, detail: "连接超时")
+    let afterSecondFailure = try store.mergeSnapshots([failedAgain])
+    expect(afterSecondFailure.first?.consecutiveFailureCount == 2, "连续失败应累积")
+    let untrusted = CertificateSnapshot(
+      hostname: first.hostname, checkedAt: now.addingTimeInterval(30),
+      expiresAt: expiry, checkState: .untrusted, detail: "证书不受信任")
+    let afterObserved = try store.mergeSnapshots([untrusted])
+    expect(
+      afterObserved.first?.lastSuccessfulCheckAt == untrusted.checkedAt
+        && afterObserved.first?.consecutiveFailureCount == 0,
+      "读取到不受信任证书仍应视为探测成功并清零失败")
     let afterOlderResult = try store.mergeSnapshots([trusted])
-    expect(afterOlderResult.first?.checkState == .failed, "较旧的检查结果不得覆盖新结果")
+    expect(afterOlderResult.first?.checkState == .untrusted, "较旧的检查结果不得覆盖新结果")
 
     try store.addNotificationTokens(["first-30"])
     try store.addNotificationTokens(["second-7"])
@@ -53,6 +75,15 @@ struct StoreChecks {
     expect(try store.snapshots().map(\.hostname) == [second.hostname], "重新添加不得复活旧快照")
 
     let snapshotFile = root.appendingPathComponent("state/snapshots.v1.json")
+    let legacy = LegacySnapshot(
+      hostname: first.hostname, checkedAt: now, expiresAt: expiry,
+      checkState: .trusted, detail: nil)
+    try JSONEncoder().encode([legacy]).write(to: snapshotFile, options: .atomic)
+    let migrated = try store.snapshots()
+    expect(
+      migrated.first?.lastSuccessfulCheckAt == now
+        && migrated.first?.consecutiveFailureCount == 0,
+      "旧版快照应推断成功时间并补齐失败次数")
     let original = root.appendingPathComponent("state/snapshots-original.json")
     try FileManager.default.moveItem(at: snapshotFile, to: original)
     try FileManager.default.createSymbolicLink(at: snapshotFile, withDestinationURL: original)
@@ -69,5 +100,13 @@ struct StoreChecks {
 
   private static func expect(_ condition: Bool, _ message: String) {
     precondition(condition, message)
+  }
+
+  private struct LegacySnapshot: Encodable {
+    let hostname: String
+    let checkedAt: Date
+    let expiresAt: Date?
+    let checkState: CertificateCheckState
+    let detail: String?
   }
 }

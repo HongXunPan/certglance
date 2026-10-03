@@ -93,16 +93,18 @@ final class FileSnapshotStore: SnapshotStore, @unchecked Sendable {
         [CertificateSnapshot].self, from: state.appendingPathComponent("snapshots.v1.json"))
       var byHost = Dictionary(uniqueKeysWithValues: saved.map { ($0.hostname, $0) })
       for result in checked where hosts.contains(result.hostname) {
-        if let old = byHost[result.hostname], result.checkedAt < old.checkedAt { continue }
-        if result.checkState == .failed, result.expiresAt == nil,
-          let expiry = byHost[result.hostname]?.expiresAt
-        {
-          byHost[result.hostname] = CertificateSnapshot(
-            hostname: result.hostname, checkedAt: result.checkedAt,
-            expiresAt: expiry, checkState: .failed, detail: result.detail)
-        } else {
-          byHost[result.hostname] = result
-        }
+        let old = byHost[result.hostname]
+        if let old, result.checkedAt <= old.checkedAt { continue }
+        let succeeded = result.checkState != .failed
+        let previousFailures = old?.consecutiveFailureCount ?? 0
+        let failureCount =
+          succeeded ? 0 : (previousFailures == Int.max ? Int.max : previousFailures + 1)
+        byHost[result.hostname] = CertificateSnapshot(
+          hostname: result.hostname, checkedAt: result.checkedAt,
+          expiresAt: result.expiresAt ?? (succeeded ? nil : old?.expiresAt),
+          checkState: result.checkState, detail: result.detail,
+          lastSuccessfulCheckAt: succeeded ? result.checkedAt : old?.lastSuccessfulCheckAt,
+          consecutiveFailureCount: failureCount)
       }
       let merged = byHost.values.filter { hosts.contains($0.hostname) }
         .sorted { $0.hostname < $1.hostname }

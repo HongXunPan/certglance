@@ -31,12 +31,12 @@ struct SSLExpiryProvider: TimelineProvider {
     let reply = TimelineReply(completion)
     Task {
       var entry = cachedEntry()
-      var reloadInterval = WidgetPlanning.staleInterval
+      var reloadInterval = DomainCheckQueue.minimumCheckInterval
       do {
         let store = try FileSnapshotStore(createIfNeeded: false)
         let domains = try store.domains()
         let snapshots = try store.snapshots()
-        let due = WidgetPlanning.domainsNeedingCheck(domains, snapshots: snapshots, at: .now)
+        let due = DomainCheckQueue.due(domains, snapshots: snapshots, at: .now)
         if !due.isEmpty {
           _ = try await DashboardRefresher().refresh(
             Array(due.prefix(WidgetPlanning.maximumChecksPerTimeline)), store: store)
@@ -46,9 +46,7 @@ struct SSLExpiryProvider: TimelineProvider {
         let currentSnapshots = try store.snapshots()
         entry = SSLExpiryEntry(
           date: .now, domains: currentDomains, snapshots: currentSnapshots, errorMessage: nil)
-        if !WidgetPlanning.domainsNeedingCheck(
-          currentDomains, snapshots: currentSnapshots, at: .now
-        ).isEmpty {
+        if !DomainCheckQueue.due(currentDomains, snapshots: currentSnapshots, at: .now).isEmpty {
           reloadInterval = WidgetPlanning.catchUpInterval
         }
       } catch {

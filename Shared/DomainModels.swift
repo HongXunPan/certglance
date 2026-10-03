@@ -54,6 +54,44 @@ struct CertificateSnapshot: Codable, Identifiable, Sendable {
   let expiresAt: Date?
   let checkState: CertificateCheckState
   let detail: String?
+  let lastSuccessfulCheckAt: Date?
+  let consecutiveFailureCount: Int
+
+  init(
+    hostname: String, checkedAt: Date, expiresAt: Date?, checkState: CertificateCheckState,
+    detail: String?, lastSuccessfulCheckAt: Date? = nil, consecutiveFailureCount: Int = 0
+  ) {
+    self.hostname = hostname
+    self.checkedAt = checkedAt
+    self.expiresAt = expiresAt
+    self.checkState = checkState
+    self.detail = detail
+    self.lastSuccessfulCheckAt = lastSuccessfulCheckAt ?? (checkState == .failed ? nil : checkedAt)
+    self.consecutiveFailureCount = consecutiveFailureCount
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case hostname, checkedAt, expiresAt, checkState, detail
+    case lastSuccessfulCheckAt, consecutiveFailureCount
+  }
+
+  init(from decoder: Decoder) throws {
+    let values = try decoder.container(keyedBy: CodingKeys.self)
+    hostname = try values.decode(String.self, forKey: .hostname)
+    checkedAt = try values.decode(Date.self, forKey: .checkedAt)
+    expiresAt = try values.decodeIfPresent(Date.self, forKey: .expiresAt)
+    checkState = try values.decode(CertificateCheckState.self, forKey: .checkState)
+    detail = try values.decodeIfPresent(String.self, forKey: .detail)
+    lastSuccessfulCheckAt =
+      try values.decodeIfPresent(Date.self, forKey: .lastSuccessfulCheckAt)
+      ?? (checkState == .failed ? nil : checkedAt)
+    let failures = try values.decodeIfPresent(Int.self, forKey: .consecutiveFailureCount) ?? 0
+    guard failures >= 0 else {
+      throw DecodingError.dataCorruptedError(
+        forKey: .consecutiveFailureCount, in: values, debugDescription: "连续失败次数不能为负数")
+    }
+    consecutiveFailureCount = failures
+  }
 
   var id: String { hostname }
 
