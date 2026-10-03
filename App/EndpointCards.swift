@@ -14,7 +14,7 @@ struct CertificateFocusCard: View {
     HStack(alignment: .center, spacing: 24) {
       VStack(spacing: 7) {
         CertificateValidityGauge(snapshot: snapshot, date: date, size: 118)
-        Text(snapshot?.validityRemainingFraction(at: date) == nil ? "有效期待更新" : "有效期剩余")
+        Text(gaugeCaption)
           .font(.caption2)
           .foregroundStyle(.secondary)
       }
@@ -34,24 +34,31 @@ struct CertificateFocusCard: View {
           .font(.subheadline.weight(.semibold))
           .foregroundStyle(severity.tint)
         expiryLine
+        CertificateValidityDetails(snapshot: snapshot, date: date)
         if let detail = snapshot?.detail {
           Text(detail)
             .font(.caption)
             .foregroundStyle(.secondary)
             .lineLimit(2)
         }
-        Text(
-          snapshot.map { "最近检查：\($0.checkedAt.formatted(date: .abbreviated, time: .shortened))" }
-            ?? "尚未检查"
-        )
-        .font(.caption)
-        .foregroundStyle(.secondary)
+        CertificateCheckDetails(snapshot: snapshot, compact: false)
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(20)
     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 22))
     .accessibilityElement(children: .contain)
+  }
+
+  private var gaugeCaption: String {
+    switch severity {
+    case .expired: return "有效期已结束"
+    case .checkFailed: return "检查失败"
+    case .untrusted: return "信任异常"
+    case .unchecked: return "尚未检查"
+    default:
+      return snapshot?.validityRemainingFraction(at: date) == nil ? "有效期待更新" : "有效期剩余"
+    }
   }
 
   @ViewBuilder
@@ -138,12 +145,7 @@ struct CertificateCompactCard: View {
           .foregroundStyle(.secondary)
           .lineLimit(1)
       }
-      Text(
-        snapshot.map { "最近检查：\($0.checkedAt.formatted(date: .abbreviated, time: .shortened))" }
-          ?? "尚未检查"
-      )
-      .font(.caption2)
-      .foregroundStyle(.secondary)
+      CertificateCheckDetails(snapshot: snapshot, compact: true)
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(16)

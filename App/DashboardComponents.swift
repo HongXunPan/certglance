@@ -55,3 +55,51 @@ struct DashboardSummary: View {
     .accessibilityLabel("\(title) \(value) 个")
   }
 }
+
+struct CertificateCheckDetails: View {
+  let snapshot: CertificateSnapshot?
+  let compact: Bool
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 3) {
+      if let snapshot {
+        Text("最近检查：\(snapshot.checkedAt.formatted(date: .abbreviated, time: .shortened))")
+        if snapshot.checkState == .failed {
+          if let successfulAt = snapshot.lastSuccessfulCheckAt {
+            Text("最近成功：\(successfulAt.formatted(date: .abbreviated, time: .shortened))")
+          } else {
+            Text("尚无成功检查")
+          }
+          Text("连续失败：\(snapshot.consecutiveFailureCount) 次")
+        }
+      } else {
+        Text("尚未检查")
+      }
+    }
+    .font(compact ? .caption2 : .caption)
+    .foregroundStyle(.secondary)
+    .accessibilityElement(children: .combine)
+  }
+}
+
+struct CertificateValidityDetails: View {
+  let snapshot: CertificateSnapshot?
+  let date: Date
+
+  var body: some View {
+    if let snapshot, snapshot.checkState == .trusted,
+      let validFrom = snapshot.validFrom, let expiry = snapshot.expiresAt,
+      let fraction = snapshot.validityRemainingFraction(at: date)
+    {
+      VStack(alignment: .leading, spacing: 3) {
+        Text("圆环：证书完整有效期中剩余 \(Int((fraction * 100).rounded()))%")
+        Text(
+          "有效期：\(validFrom.formatted(date: .abbreviated, time: .omitted)) 至 \(expiry.formatted(date: .abbreviated, time: .omitted))"
+        )
+      }
+      .font(.caption)
+      .foregroundStyle(.secondary)
+      .accessibilityElement(children: .combine)
+    }
+  }
+}

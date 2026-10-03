@@ -11,9 +11,13 @@ struct DomainManagementView: View {
         VStack(alignment: .leading, spacing: 20) {
           heading
           if let storageError = model.storageError {
-            ContentUnavailableView(
-              "共享数据不可用", systemImage: "externaldrive.badge.exclamationmark",
-              description: Text(storageError))
+            VStack(spacing: 12) {
+              ContentUnavailableView(
+                "共享数据不可用", systemImage: "externaldrive.badge.exclamationmark",
+                description: Text(storageError))
+              Button("修复后重新读取") { Task { await model.load() } }
+                .disabled(model.isChecking)
+            }
           } else if model.domains.isEmpty {
             ContentUnavailableView(
               "还没有监控端点", systemImage: "checkmark.shield",
@@ -22,6 +26,16 @@ struct DomainManagementView: View {
             .frame(maxWidth: .infinity)
           } else {
             VStack(alignment: .leading, spacing: 18) {
+              if let message = model.lastActionMessage {
+                HStack(spacing: 10) {
+                  Label(message, systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(.secondary)
+                  Spacer(minLength: 0)
+                  Button("关闭") { model.dismissActionMessage() }
+                }
+                .padding(12)
+                .background(.quaternary, in: RoundedRectangle(cornerRadius: 12))
+              }
               DashboardSummary(
                 domains: model.domains, snapshots: model.snapshots, date: context.date)
               if !model.notificationsEnabled {
@@ -49,7 +63,7 @@ struct DomainManagementView: View {
       } label: {
         Label("检查全部端点", systemImage: "arrow.clockwise")
       }
-      .disabled(model.isChecking || model.domains.isEmpty)
+      .disabled(model.storageError != nil || model.isChecking || model.domains.isEmpty)
     }
     .sheet(isPresented: $isShowingAddSheet) {
       AddEndpointSheet(model: model)
@@ -132,7 +146,9 @@ struct DomainManagementView: View {
       Label(model.notificationDescription, systemImage: "bell.badge")
         .foregroundStyle(.secondary)
       Spacer()
-      Button("开启通知") { Task { await model.requestNotifications() } }
+      Button(model.notificationDenied ? "检查通知状态" : "开启通知") {
+        Task { await model.requestNotifications() }
+      }
     }
     .padding(12)
     .background(.quaternary, in: RoundedRectangle(cornerRadius: 12))

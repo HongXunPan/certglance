@@ -19,9 +19,10 @@ struct SSLExpiryWidgetView: View {
   var body: some View {
     Group {
       if let error = entry.errorMessage, entry.domains.isEmpty {
-        stateView(title: "无法读取看板", detail: error, symbol: "exclamationmark.shield")
+        WidgetEmptyState(title: "无法读取看板", detail: error, symbol: "exclamationmark.shield")
       } else if ordered.isEmpty {
-        stateView(title: "添加域名", detail: "打开 CertGlance 开始监控证书", symbol: "plus.circle")
+        WidgetEmptyState(
+          title: "添加域名", detail: "打开 CertGlance 开始监控证书", symbol: "plus.circle")
       } else if let focus = ordered.first {
         if effectiveFamily == .systemMedium { mediumContent(focus) } else { smallContent(focus) }
       }
@@ -45,11 +46,11 @@ struct SSLExpiryWidgetView: View {
       expiryLine(snapshot)
         .padding(.top, 4)
       Spacer(minLength: 0)
-      if entry.errorMessage != nil {
-        Label("更新失败", systemImage: "exclamationmark.triangle")
-          .font(.caption2)
-          .foregroundStyle(.secondary)
-      }
+      WidgetFreshnessFooter(entry: entry, snapshot: snapshot)
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+        .minimumScaleFactor(0.75)
     }
     .accessibilityElement(children: .combine)
     .accessibilityLabel(accessibilityDescription(domain, snapshot: snapshot, severity: severity))
@@ -78,7 +79,8 @@ struct SSLExpiryWidgetView: View {
         if ordered.count > 1 {
           VStack(alignment: .leading, spacing: 10) {
             ForEach(Array(ordered.dropFirst().prefix(2))) { other in
-              compactRow(other)
+              WidgetCompactEndpointRow(
+                domain: other, snapshot: snapshotByID[other.id], date: entry.date)
             }
           }
           .frame(maxWidth: .infinity, alignment: .leading)
@@ -86,10 +88,19 @@ struct SSLExpiryWidgetView: View {
       }
       Spacer(minLength: 0)
       if let snapshot {
-        Text("最近检查：\(snapshot.checkedAt.formatted(date: .abbreviated, time: .shortened))")
-          .font(.caption2)
-          .foregroundStyle(.secondary)
-          .lineLimit(1)
+        VStack(alignment: .leading, spacing: 2) {
+          Text("最近检查：\(snapshot.checkedAt.formatted(date: .abbreviated, time: .shortened))")
+          if snapshot.checkState == .failed {
+            let lastSuccess =
+              snapshot.lastSuccessfulCheckAt.map {
+                $0.formatted(date: .abbreviated, time: .omitted)
+              } ?? "尚无"
+            Text("最近成功：\(lastSuccess) · 连续失败 \(snapshot.consecutiveFailureCount) 次")
+          }
+        }
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
       }
     }
     .accessibilityElement(children: .contain)
@@ -112,6 +123,10 @@ struct SSLExpiryWidgetView: View {
         .font(.caption2.weight(.semibold))
         .accessibilityElement(children: .combine)
         .accessibilityHint("打开应用查看并主动重试")
+      } else if entry.reminderErrorMessage != nil {
+        Label("提醒异常", systemImage: "bell.slash")
+          .font(.caption2.weight(.semibold))
+          .accessibilityHint("证书数据已更新，请打开应用查看提醒状态")
       } else {
         Text("\(entry.domains.count)")
           .font(.caption.weight(.semibold).monospacedDigit())
@@ -145,53 +160,6 @@ struct SSLExpiryWidgetView: View {
     }
   }
 
-  private func compactRow(_ domain: WatchedDomain) -> some View {
-    let snapshot = snapshotByID[domain.id]
-    let severity = snapshot?.severity(at: entry.date) ?? .unchecked
-    return VStack(alignment: .leading, spacing: 3) {
-      HStack(spacing: 6) {
-        Image(systemName: severity.symbol)
-          .foregroundStyle(severity.tint)
-          .accessibilityHidden(true)
-        Text(domain.displayName)
-          .font(.caption.weight(.medium))
-          .lineLimit(1)
-          .truncationMode(.middle)
-      }
-      HStack(spacing: 4) {
-        Text(severity.label).font(.caption2).foregroundStyle(.secondary)
-        Spacer(minLength: 0)
-        if let days = snapshot?.daysRemaining(at: entry.date), severity != .checkFailed,
-          severity != .untrusted
-        {
-          Text(days <= 0 ? "已过期" : "\(days) 天")
-            .font(.caption.weight(.semibold).monospacedDigit())
-        }
-      }
-      if let snapshot, let expiry = snapshot.expiresAt {
-        Text(
-          "\(snapshot.checkState == .failed ? "已知到期" : "到期") \(expiry.formatted(.dateTime.month(.abbreviated).day()))"
-        )
-        .font(.caption2)
-        .foregroundStyle(.secondary)
-        .lineLimit(1)
-      }
-    }
-    .accessibilityElement(children: .combine)
-  }
-
-  private func stateView(title: String, detail: String, symbol: String) -> some View {
-    VStack(alignment: .leading, spacing: 8) {
-      Image(systemName: symbol)
-        .font(.title2)
-        .foregroundStyle(.secondary)
-        .accessibilityHidden(true)
-      Spacer()
-      Text(title).font(.headline)
-      Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(3)
-    }
-  }
-
   private func accessibilityDescription(
     _ domain: WatchedDomain, snapshot: CertificateSnapshot?, severity: CertificateSeverity
   ) -> String {
@@ -204,11 +172,23 @@ struct SSLExpiryWidgetView: View {
       remaining = severity.label
     }
     let updateState = entry.errorMessage == nil ? "" : "本次更新失败，"
+    let reminderState = entry.reminderErrorMessage == nil ? "" : "提醒同步失败，"
+    let failureState: String
+    if let snapshot, snapshot.checkState == .failed {
+      let lastSuccess =
+        snapshot.lastSuccessfulCheckAt.map {
+          $0.formatted(date: .abbreviated, time: .shortened)
+        } ?? "尚无"
+      failureState = "，连续失败 \(snapshot.consecutiveFailureCount) 次，最近成功 \(lastSuccess)"
+    } else {
+      failureState = ""
+    }
     let expiry =
       snapshot?.expiresAt.map {
         let label = snapshot?.checkState == .failed ? "上次已知截止于" : "截止于"
         return "，\(label) \($0.formatted(date: .abbreviated, time: .omitted))"
       } ?? ""
-    return "\(updateState)\(domain.displayName)，\(remaining)\(expiry)"
+    return
+      "\(updateState)\(reminderState)\(domain.displayName)，\(remaining)\(expiry)\(failureState)"
   }
 }
