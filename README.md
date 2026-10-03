@@ -13,26 +13,28 @@ CertGlance 以系统桌面小组件为主要入口，优先展示最需要关注
 
 ## 项目状态
 
-**开发中，暂无经过实机验收的稳定安装版。**工程可做无签名构建；正式签名、DMG、更新、安装后共享数据与通知投递尚未完成验收。小组件刷新由 macOS 调度，不能作为全天候生产告警的唯一渠道。
+**功能候选已实现，尚未完成正式应用的签名安装实机验收。**源码包含自签名文件桥接、真实 TLS 检查、默认 30／7／1 天提醒与小／中尺寸 Widget。手动 GitHub Actions 可生成非公证 DMG；CI 静态签名通过不等于小组件、跨进程文件共享或系统通知投递在用户电脑上通过。小组件刷新由 macOS 调度，不能作为全天候生产告警的唯一渠道。
 
-工程内部暂沿用 `SSLWidget` 名称及开发态 Bundle ID；它们不是已确定的正式分发身份。技术边界见 [工程代码技术选型](docs/工程代码技术选型.md)。
+Xcode 工程与 scheme 沿用内部名称 `SSLWidget`，正式宿主 Bundle ID 为 `com.HongXunPan.CertGlance`，Widget Bundle ID 为 `com.HongXunPan.CertGlance.Widget`。技术边界见[工程代码技术选型](docs/工程代码技术选型.md)。
 
 ## 开发验证
 
 在本目录运行：
 
 ```sh
-plutil -lint SSLWidget.xcodeproj/project.pbxproj App/Info.plist Widget/Info.plist App/App.entitlements Widget/Widget.entitlements
-xcrun swift format lint --recursive --strict App Widget Shared
+bash scripts/check-certglance.sh
 xcodebuild -project SSLWidget.xcodeproj -scheme SSLWidget -destination 'platform=macOS' -derivedDataPath .build/DerivedData CODE_SIGNING_ALLOWED=NO build
-xcrun swiftc -swift-version 6 -parse-as-library -module-cache-path .build/SwiftModuleCache -Xcc -fmodules-cache-path=.build/ClangModuleCache Shared/DomainModels.swift Shared/NotificationPolicy.swift Tests/ModelChecks.swift -o .build/ModelChecks && .build/ModelChecks
 ```
 
-无签名构建仅证明源码和工程能编译，不能证明系统小组件注册、共享容器和通知投递可用。
+无签名构建仅证明源码和工程能编译，不能证明系统小组件注册、共享文件桥接和通知投递可用。父仓 `scripts/verify.sh` 另可做双架构与真实域名网络冒烟。
+
+## 安装候选
+
+手动工作流 [CertGlance 正式候选打包](.github/workflows/certglance.yml) 使用项目专用自签名证书生成双架构、非公证 DMG，不自动发布 Release。首次安装、系统安全提示、签名校验、运行态验收和已知升级限制见[正式候选验收](docs/正式候选验收.md)。不要把假数据 PoC DMG 当成正式 App，也不要用 Finder 拖拽覆盖已安装的旧版作为已支持升级方式。
 
 ## 签名文件共享实验
 
-独立的 [WidgetKit 共享 PoC](PoC/WidgetSharing/README.md) 只使用假数据，验证自签名宿主与小组件能否访问同一专用文件；它不修改正式应用。手动 [GitHub Actions 工作流](.github/workflows/widget-sharing-poc.yml) 可打包候选 DMG，但须先配置项目专用签名 Secrets。源码提交、静态构建和 CI 打包均不代表安装后共享已通过验收，也不会自动发布正式版。
+独立的 [WidgetKit 共享 PoC](PoC/WidgetSharing/README.md) 只使用假数据，曾验证自签名宿主与小组件能否访问同一专用文件。它保留为升级与共享诊断工程，与正式 CertGlance 的 Bundle ID、数据目录和打包工作流隔离；其运行态结果不能代替正式应用验收。
 
 ## 开源许可
 

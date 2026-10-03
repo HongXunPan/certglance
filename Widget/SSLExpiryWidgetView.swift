@@ -4,6 +4,9 @@ import WidgetKit
 struct SSLExpiryWidgetView: View {
   @Environment(\.widgetFamily) private var family
   let entry: SSLExpiryEntry
+  var previewFamily: WidgetFamily?
+
+  private var effectiveFamily: WidgetFamily { previewFamily ?? family }
 
   private var ordered: [WatchedDomain] {
     DashboardOrder.sorted(entry.domains, snapshots: entry.snapshots, at: entry.date)
@@ -18,9 +21,9 @@ struct SSLExpiryWidgetView: View {
       if let error = entry.errorMessage, entry.domains.isEmpty {
         stateView(title: "无法读取看板", detail: error, symbol: "exclamationmark.shield")
       } else if ordered.isEmpty {
-        stateView(title: "添加域名", detail: "打开 App 开始监控证书", symbol: "plus.circle")
+        stateView(title: "添加域名", detail: "打开 CertGlance 开始监控证书", symbol: "plus.circle")
       } else if let focus = ordered.first {
-        if family == .systemMedium { mediumContent(focus) } else { smallContent(focus) }
+        if effectiveFamily == .systemMedium { mediumContent(focus) } else { smallContent(focus) }
       }
     }
     .containerBackground(for: .widget) { Color(nsColor: .windowBackgroundColor) }
@@ -31,49 +34,61 @@ struct SSLExpiryWidgetView: View {
     let severity = snapshot?.severity(at: entry.date) ?? .unchecked
     return VStack(alignment: .leading, spacing: 0) {
       header
-      Spacer(minLength: 5)
+      Spacer(minLength: 8)
       focusMetric(snapshot, severity: severity)
       Text(domain.hostname)
-        .font(.headline).lineLimit(1).minimumScaleFactor(0.8)
-        .padding(.top, 6)
-      footer(snapshot, severity: severity)
+        .font(.headline)
+        .lineLimit(2)
+        .minimumScaleFactor(0.8)
         .padding(.top, 5)
+      Spacer(minLength: 6)
+      statusLine(snapshot, severity: severity)
     }
     .accessibilityElement(children: .combine)
+    .accessibilityLabel(accessibilityDescription(domain, snapshot: snapshot, severity: severity))
   }
 
   private func mediumContent(_ domain: WatchedDomain) -> some View {
     let snapshot = snapshotByHost[domain.hostname]
     let severity = snapshot?.severity(at: entry.date) ?? .unchecked
-    return VStack(alignment: .leading, spacing: 10) {
+    return VStack(alignment: .leading, spacing: 0) {
       header
-      HStack(alignment: .top, spacing: 16) {
+      Divider().padding(.vertical, 10)
+      HStack(alignment: .top, spacing: 18) {
         VStack(alignment: .leading, spacing: 0) {
           focusMetric(snapshot, severity: severity)
           Text(domain.hostname)
-            .font(.headline).lineLimit(1).minimumScaleFactor(0.8)
-            .padding(.top, 4)
-          footer(snapshot, severity: severity).padding(.top, 4)
+            .font(.headline)
+            .lineLimit(2)
+            .minimumScaleFactor(0.8)
+            .padding(.top, 5)
+          statusLine(snapshot, severity: severity).padding(.top, 7)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
 
         if ordered.count > 1 {
-          VStack(alignment: .leading, spacing: 9) {
+          VStack(alignment: .leading, spacing: 10) {
             ForEach(Array(ordered.dropFirst().prefix(2))) { other in
               compactRow(other)
             }
-            Spacer(minLength: 0)
           }
           .frame(maxWidth: .infinity, alignment: .leading)
         }
       }
       Spacer(minLength: 0)
+      if let snapshot {
+        Text("最近检查：\(snapshot.checkedAt.formatted(date: .abbreviated, time: .shortened))")
+          .font(.caption2)
+          .foregroundStyle(.secondary)
+          .lineLimit(1)
+      }
     }
+    .accessibilityElement(children: .contain)
   }
 
   private var header: some View {
     HStack {
-      Label("SSL 证书", systemImage: "lock.shield")
+      Label("CertGlance", systemImage: "lock.shield")
         .font(.caption.weight(.semibold))
         .foregroundStyle(.secondary)
       Spacer()
@@ -101,48 +116,44 @@ struct SSLExpiryWidgetView: View {
     -> some View
   {
     HStack(alignment: .firstTextBaseline, spacing: 4) {
-      if let snapshot, snapshot.checkState != .failed,
-        let days = snapshot.daysRemaining(at: entry.date)
-      {
-        Text("\(max(0, days))")
-          .font(.system(size: 48, weight: .bold, design: .rounded).monospacedDigit())
-          .contentTransition(.numericText())
-          .accessibilityLabel(
-            severity == .expired ? "证书已过期" : "证书剩余 \(max(0, days)) 天")
-        Text("天")
-          .font(.title3.weight(.medium))
-          .accessibilityHidden(true)
-      } else {
+      if severity == .expired {
+        Text("已过期")
+          .font(.system(size: 32, weight: .bold, design: .rounded))
+      } else if severity == .checkFailed || severity == .untrusted || severity == .unchecked {
         Image(systemName: severity.symbol)
           .font(.system(size: 38, weight: .semibold))
           .accessibilityHidden(true)
+      } else if let snapshot,
+        let days = snapshot.daysRemaining(at: entry.date)
+      {
+        Text("\(days)")
+          .font(.system(size: 46, weight: .bold, design: .rounded).monospacedDigit())
+          .contentTransition(.numericText())
+        Text("天")
+          .font(.title3.weight(.medium))
       }
     }
     .foregroundStyle(severity.tint)
     .minimumScaleFactor(0.7)
   }
 
-  private func footer(_ snapshot: CertificateSnapshot?, severity: CertificateSeverity) -> some View
+  private func statusLine(_ snapshot: CertificateSnapshot?, severity: CertificateSeverity)
+    -> some View
   {
-    VStack(alignment: .leading, spacing: 2) {
-      HStack(spacing: 4) {
-        Image(systemName: severity.symbol)
-          .foregroundStyle(severity.tint)
-          .accessibilityHidden(true)
-        Text(severity.label)
-          .foregroundStyle(.primary)
-      }
-      .font(.caption2.weight(.medium))
-      if let snapshot, snapshot.checkState != .failed {
-        HStack(spacing: 0) {
-          Text("上次检查：")
-          Text(.currentDate, format: .reference(to: snapshot.checkedAt))
-        }
-        .font(.caption2)
-        .foregroundStyle(.secondary)
-        .lineLimit(1)
+    HStack(spacing: 5) {
+      Image(systemName: severity.symbol)
+        .foregroundStyle(severity.tint)
+        .accessibilityHidden(true)
+      Text(severity.label)
+        .foregroundStyle(.primary)
+      Spacer(minLength: 2)
+      if let snapshot, snapshot.checkState != .failed, let expiry = snapshot.expiresAt {
+        Text(expiry, format: .dateTime.month(.abbreviated).day())
+          .foregroundStyle(.secondary)
+          .lineLimit(1)
       }
     }
+    .font(.caption2.weight(.medium))
   }
 
   private func compactRow(_ domain: WatchedDomain) -> some View {
@@ -153,12 +164,17 @@ struct SSLExpiryWidgetView: View {
         .foregroundStyle(severity.tint)
         .accessibilityHidden(true)
       VStack(alignment: .leading, spacing: 2) {
-        Text(domain.hostname).font(.caption.weight(.medium)).lineLimit(1)
+        Text(domain.hostname)
+          .font(.caption.weight(.medium))
+          .lineLimit(3)
+          .minimumScaleFactor(0.85)
         Text(severity.label).font(.caption2).foregroundStyle(.secondary)
       }
       Spacer(minLength: 0)
-      if let days = snapshot?.daysRemaining(at: entry.date), snapshot?.checkState != .failed {
-        Text("\(max(0, days))天")
+      if let days = snapshot?.daysRemaining(at: entry.date), severity != .checkFailed,
+        severity != .untrusted
+      {
+        Text(days <= 0 ? "已过期" : "\(days) 天")
           .font(.caption.weight(.semibold).monospacedDigit())
           .foregroundStyle(.primary)
       }
@@ -176,5 +192,25 @@ struct SSLExpiryWidgetView: View {
       Text(title).font(.headline)
       Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(3)
     }
+  }
+
+  private func accessibilityDescription(
+    _ domain: WatchedDomain, snapshot: CertificateSnapshot?, severity: CertificateSeverity
+  ) -> String {
+    let remaining: String
+    if let days = snapshot?.daysRemaining(at: entry.date), severity != .checkFailed,
+      severity != .untrusted
+    {
+      remaining = days <= 0 ? "证书已过期" : "证书剩余 \(days) 天"
+    } else {
+      remaining = severity.label
+    }
+    let updateState = entry.errorMessage == nil ? "" : "本次更新失败，"
+    let expiry =
+      snapshot?.expiresAt.map {
+        let label = snapshot?.checkState == .failed ? "上次已知截止于" : "截止于"
+        return "，\(label) \($0.formatted(date: .abbreviated, time: .omitted))"
+      } ?? ""
+    return "\(updateState)\(domain.hostname)，\(remaining)\(expiry)"
   }
 }

@@ -29,10 +29,8 @@ struct NotificationCoordinator: Sendable {
     }
     center.removePendingNotificationRequests(withIdentifiers: obsolete)
 
-    var tokens = Set(
-      try store.notificationTokens().filter { token in
-        validPrefixes.contains(where: token.hasPrefix)
-      })
+    let tokens = try store.notificationTokens()
+    var added: Set<String> = []
     for snapshot in active {
       guard let expiry = snapshot.expiresAt else { continue }
       let identifierBase = "\(prefix)\(snapshot.hostname).\(Int(expiry.timeIntervalSince1970))."
@@ -43,17 +41,17 @@ struct NotificationCoordinator: Sendable {
             makeRequest(
               identifier: identifier, snapshot: snapshot,
               threshold: moment.threshold, date: date))
-          tokens.insert(identifier)
+          added.insert(identifier)
         } else if !tokens.contains(identifier) {
           try await center.add(
             makeRequest(
               identifier: identifier, snapshot: snapshot,
               threshold: moment.threshold, date: nil))
-          tokens.insert(identifier)
+          added.insert(identifier)
         }
       }
     }
-    try store.saveNotificationTokens(tokens)
+    try store.addNotificationTokens(added)
   }
 
   private func makeRequest(

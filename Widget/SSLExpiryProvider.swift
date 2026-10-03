@@ -32,7 +32,7 @@ struct SSLExpiryProvider: TimelineProvider {
     Task {
       var entry = cachedEntry()
       do {
-        let store = try AppGroupSnapshotStore()
+        let store = try FileSnapshotStore(createIfNeeded: false)
         let domains = try store.domains()
         let snapshots = try store.snapshots()
         let snapshotHosts = Set(snapshots.map(\.hostname))
@@ -58,7 +58,7 @@ struct SSLExpiryProvider: TimelineProvider {
 
   private func cachedEntry() -> SSLExpiryEntry {
     do {
-      let store = try AppGroupSnapshotStore()
+      let store = try FileSnapshotStore(createIfNeeded: false)
       return SSLExpiryEntry(
         date: .now, domains: try store.domains(),
         snapshots: try store.snapshots(), errorMessage: nil)

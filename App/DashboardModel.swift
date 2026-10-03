@@ -9,6 +9,7 @@ final class DashboardModel: ObservableObject {
   @Published private(set) var snapshots: [CertificateSnapshot] = []
   @Published private(set) var isChecking = false
   @Published private(set) var notificationDescription = "正在读取通知状态"
+  @Published private(set) var notificationsEnabled = false
   @Published var alertMessage: String?
   let storageError: String?
 
@@ -18,7 +19,7 @@ final class DashboardModel: ObservableObject {
 
   init() {
     do {
-      store = try AppGroupSnapshotStore()
+      store = try FileSnapshotStore(createIfNeeded: true)
       storageError = nil
     } catch {
       store = nil
@@ -47,10 +48,10 @@ final class DashboardModel: ObservableObject {
         throw DomainInputError.duplicate
       }
       let updated = domains + [WatchedDomain(hostname: hostname, addedAt: Date())]
-      try store.saveDomains(updated)
+      try store.replaceDomains(updated)
       domains = updated
       input = ""
-      WidgetCenter.shared.reloadTimelines(ofKind: "SSLExpiryBoard")
+      WidgetCenter.shared.reloadTimelines(ofKind: CertGlanceIdentity.widgetKind)
       await refresh()
     } catch {
       alertMessage = error.localizedDescription
@@ -61,12 +62,11 @@ final class DashboardModel: ObservableObject {
     guard let store else { return }
     do {
       let updated = domains.filter { $0.hostname != hostname }
-      let remaining = snapshots.filter { $0.hostname != hostname }
-      try store.saveDomains(updated)
-      try store.saveSnapshots(remaining)
+      try store.replaceDomains(updated)
+      let remaining = try store.snapshots()
       domains = updated
       snapshots = remaining
-      WidgetCenter.shared.reloadTimelines(ofKind: "SSLExpiryBoard")
+      WidgetCenter.shared.reloadTimelines(ofKind: CertGlanceIdentity.widgetKind)
       try await notifications.synchronize(remaining, store: store)
     } catch {
       alertMessage = error.localizedDescription
@@ -79,7 +79,7 @@ final class DashboardModel: ObservableObject {
     defer { isChecking = false }
     do {
       snapshots = try await refresher.refresh(domains, store: store)
-      WidgetCenter.shared.reloadTimelines(ofKind: "SSLExpiryBoard")
+      WidgetCenter.shared.reloadTimelines(ofKind: CertGlanceIdentity.widgetKind)
       try await notifications.synchronize(snapshots, store: store)
     } catch {
       alertMessage = "检查或提醒未完成：\(error.localizedDescription)"
@@ -108,9 +108,15 @@ final class DashboardModel: ObservableObject {
   private func updateNotificationDescription() async {
     let status = await notifications.authorizationStatus()
     switch status {
-    case .authorized, .provisional: notificationDescription = "通知已开启"
-    case .denied: notificationDescription = "通知已关闭，请在系统设置中开启"
-    default: notificationDescription = "尚未授权通知"
+    case .authorized, .provisional:
+      notificationDescription = "通知已开启"
+      notificationsEnabled = true
+    case .denied:
+      notificationDescription = "通知已关闭，请在系统设置中开启"
+      notificationsEnabled = false
+    default:
+      notificationDescription = "尚未授权通知"
+      notificationsEnabled = false
     }
   }
 }

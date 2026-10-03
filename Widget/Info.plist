@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleDevelopmentRegion</key><string>zh-Hans</string>
-    <key>CFBundleDisplayName</key><string>SSL 证书到期</string>
+    <key>CFBundleDisplayName</key><string>CertGlance 证书到期</string>
     <key>CFBundleExecutable</key><string>$(EXECUTABLE_NAME)</string>
     <key>CFBundleIdentifier</key><string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
     <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>

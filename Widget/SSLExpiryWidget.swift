@@ -4,7 +4,8 @@ import WidgetKit
 @main
 struct SSLExpiryWidget: Widget {
   var body: some WidgetConfiguration {
-    StaticConfiguration(kind: "SSLExpiryBoard", provider: SSLExpiryProvider()) { entry in
+    StaticConfiguration(kind: CertGlanceIdentity.widgetKind, provider: SSLExpiryProvider()) {
+      entry in
       SSLExpiryWidgetView(entry: entry)
     }
     .configurationDisplayName("SSL 证书到期")
