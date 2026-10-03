@@ -7,91 +7,42 @@ struct SSLExpiryEntry: TimelineEntry, Sendable {
   let snapshots: [CertificateSnapshot]
   let errorMessage: String?
   let reminderErrorMessage: String?
+  let selection: WidgetDisplaySelection
+
+  init(
+    date: Date, domains: [WatchedDomain], snapshots: [CertificateSnapshot],
+    errorMessage: String?, reminderErrorMessage: String?,
+    selection: WidgetDisplaySelection = .automatic
+  ) {
+    self.date = date
+    self.domains = domains
+    self.snapshots = snapshots
+    self.errorMessage = errorMessage
+    self.reminderErrorMessage = reminderErrorMessage
+    self.selection = selection
+  }
+
+  func at(_ date: Date) -> SSLExpiryEntry {
+    SSLExpiryEntry(
+      date: date, domains: domains, snapshots: snapshots,
+      errorMessage: errorMessage, reminderErrorMessage: reminderErrorMessage,
+      selection: selection)
+  }
 }
 
 struct SSLExpiryProvider: TimelineProvider {
   func placeholder(in context: Context) -> SSLExpiryEntry {
-    SSLExpiryEntry(
-      date: .now,
-      domains: [WatchedDomain(hostname: "example.com", addedAt: .now)],
-      snapshots: [
-        CertificateSnapshot(
-          hostname: "example.com", checkedAt: .now,
-          expiresAt: .now.addingTimeInterval(6 * 86_400),
-          checkState: .trusted, detail: nil,
-          validFrom: .now.addingTimeInterval(-84 * 86_400))
-      ],
-      errorMessage: nil, reminderErrorMessage: nil
-    )
+    WidgetTimelineSource.placeholder(selection: .automatic)
   }
 
   func getSnapshot(in context: Context, completion: @escaping (SSLExpiryEntry) -> Void) {
-    completion(cachedEntry())
+    completion(WidgetTimelineSource.cachedEntry(selection: .automatic))
   }
 
   func getTimeline(in context: Context, completion: @escaping (Timeline<SSLExpiryEntry>) -> Void) {
     let reply = TimelineReply(completion)
     Task {
-      var entry = cachedEntry()
-      var reloadInterval = DomainCheckQueue.minimumCheckInterval
-      do {
-        let store = try FileSnapshotStore(createIfNeeded: false)
-        let domains = try store.domains()
-        let snapshots = try store.snapshots()
-        let due = DomainCheckQueue.due(domains, snapshots: snapshots, at: .now)
-        var refreshError: String?
-        if !due.isEmpty {
-          do {
-            _ = try await DashboardRefresher().refresh(
-              Array(due.prefix(WidgetPlanning.maximumChecksPerTimeline)), store: store)
-          } catch {
-            refreshError = error.localizedDescription
-          }
-        }
-        let currentDomains = try store.domains()
-        let currentSnapshots = try store.snapshots()
-        var reminderError: String?
-        if !due.isEmpty {
-          do {
-            try await NotificationCoordinator().synchronize(store: store)
-          } catch {
-            reminderError = error.localizedDescription
-          }
-        }
-        entry = SSLExpiryEntry(
-          date: .now, domains: currentDomains, snapshots: currentSnapshots,
-          errorMessage: refreshError, reminderErrorMessage: reminderError)
-        if !DomainCheckQueue.due(currentDomains, snapshots: currentSnapshots, at: .now).isEmpty {
-          reloadInterval = WidgetPlanning.catchUpInterval
-        }
-      } catch {
-        entry = SSLExpiryEntry(
-          date: .now, domains: entry.domains,
-          snapshots: entry.snapshots, errorMessage: error.localizedDescription,
-          reminderErrorMessage: nil)
-      }
-      let now = Date()
-      let entries = WidgetPlanning.timelineDates(snapshots: entry.snapshots, from: now).map {
-        SSLExpiryEntry(
-          date: $0, domains: entry.domains,
-          snapshots: entry.snapshots, errorMessage: entry.errorMessage,
-          reminderErrorMessage: entry.reminderErrorMessage)
-      }
-      reply.complete(
-        Timeline(entries: entries, policy: .after(now.addingTimeInterval(reloadInterval))))
-    }
-  }
-
-  private func cachedEntry() -> SSLExpiryEntry {
-    do {
-      let store = try FileSnapshotStore(createIfNeeded: false)
-      return SSLExpiryEntry(
-        date: .now, domains: try store.domains(),
-        snapshots: try store.snapshots(), errorMessage: nil, reminderErrorMessage: nil)
-    } catch {
-      return SSLExpiryEntry(
-        date: .now, domains: [], snapshots: [],
-        errorMessage: error.localizedDescription, reminderErrorMessage: nil)
+      reply.complete(await WidgetTimelineSource.timeline(selection: .automatic))
     }
   }
 }

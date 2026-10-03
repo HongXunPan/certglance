@@ -30,6 +30,42 @@ enum SharedStoreError: LocalizedError {
 enum CertGlanceIdentity {
   static let directoryName = "com.HongXunPan.CertGlance"
   static let widgetKind = "com.HongXunPan.CertGlance.ExpiryBoard"
+  static let pinnedWidgetKind = "com.HongXunPan.CertGlance.PinnedEndpoint"
+  static let widgetKinds = [widgetKind, pinnedWidgetKind]
+}
+
+final class WidgetRefreshLease: @unchecked Sendable {
+  private let descriptor: Int32
+
+  init(descriptor: Int32) {
+    self.descriptor = descriptor
+  }
+
+  func beginBatch(at date: Date, minimumSpacing: TimeInterval) throws -> Bool {
+    var previous = Int64(0)
+    let readCount = pread(descriptor, &previous, MemoryLayout<Int64>.size, 0)
+    guard readCount == 0 || readCount == MemoryLayout<Int64>.size else {
+      throw SharedStoreError.corrupted
+    }
+    let now = Int64(date.timeIntervalSince1970)
+    let elapsed = TimeInterval(now) - TimeInterval(previous)
+    if readCount != 0, elapsed >= 0, elapsed < minimumSpacing {
+      return false
+    }
+    var started = now
+    guard
+      pwrite(descriptor, &started, MemoryLayout<Int64>.size, 0)
+        == MemoryLayout<Int64>.size
+    else {
+      throw SharedStoreError.unavailable
+    }
+    return true
+  }
+
+  deinit {
+    flock(descriptor, LOCK_UN)
+    close(descriptor)
+  }
 }
 
 final class FileSnapshotStore: SnapshotStore, @unchecked Sendable {
@@ -130,6 +166,27 @@ final class FileSnapshotStore: SnapshotStore, @unchecked Sendable {
         Set(saved).union(tokens).sorted(),
         to: state.appendingPathComponent("notification-tokens.v1.json"))
     }
+  }
+
+  func tryAcquireWidgetRefreshLease() throws -> WidgetRefreshLease? {
+    let url = state.appendingPathComponent("widget-refresh.lock")
+    let descriptor = open(url.path, O_CREAT | O_RDWR | O_NOFOLLOW, 0o600)
+    guard descriptor >= 0 else { throw SharedStoreError.unavailable }
+    var info = stat()
+    guard fstat(descriptor, &info) == 0,
+      (info.st_mode & S_IFMT) == S_IFREG, info.st_uid == getuid(),
+      info.st_size == 0 || info.st_size == MemoryLayout<Int64>.size
+    else {
+      close(descriptor)
+      throw SharedStoreError.unsafePath
+    }
+    guard flock(descriptor, LOCK_EX | LOCK_NB) == 0 else {
+      let reason = errno
+      close(descriptor)
+      if reason == EWOULDBLOCK { return nil }
+      throw SharedStoreError.unavailable
+    }
+    return WidgetRefreshLease(descriptor: descriptor)
   }
 
   private func prepareDirectories() throws {

@@ -65,7 +65,7 @@ final class DashboardModel: ObservableObject {
       input = ""
       inputError = nil
       lastActionMessage = "已添加 \(domain.displayName)；检查结果会显示在看板中。"
-      WidgetCenter.shared.reloadTimelines(ofKind: CertGlanceIdentity.widgetKind)
+      reloadWidgets()
       Task { await enqueueRefresh(.endpoint(domain.id)) }
       return true
     } catch {
@@ -84,7 +84,7 @@ final class DashboardModel: ObservableObject {
       domains = updated
       snapshots = remaining
       lastActionMessage = nil
-      WidgetCenter.shared.reloadTimelines(ofKind: CertGlanceIdentity.widgetKind)
+      reloadWidgets()
     } catch {
       alertMessage = error.localizedDescription
       if error is SharedStoreError { storageError = error.localizedDescription }
@@ -125,7 +125,7 @@ final class DashboardModel: ObservableObject {
       domains = try store.domains()
       snapshots = try store.snapshots()
       if !queue.isEmpty {
-        WidgetCenter.shared.reloadTimelines(ofKind: CertGlanceIdentity.widgetKind)
+        reloadWidgets()
       }
     } catch {
       alertMessage = "证书检查未完成：\(error.localizedDescription)"
@@ -169,6 +169,12 @@ final class DashboardModel: ObservableObject {
 
   func snapshot(for id: String) -> CertificateSnapshot? {
     snapshots.first { $0.id == id }
+  }
+
+  private func reloadWidgets() {
+    for kind in CertGlanceIdentity.widgetKinds {
+      WidgetCenter.shared.reloadTimelines(ofKind: kind)
+    }
   }
 
   private func updateNotificationDescription() async {

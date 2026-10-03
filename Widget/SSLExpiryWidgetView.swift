@@ -23,8 +23,21 @@ struct SSLExpiryWidgetView: View {
       } else if ordered.isEmpty {
         WidgetEmptyState(
           title: "添加域名", detail: "打开 CertGlance 开始监控证书", symbol: "plus.circle")
-      } else if let focus = ordered.first {
-        if effectiveFamily == .systemMedium { mediumContent(focus) } else { smallContent(focus) }
+      } else if entry.selection == .pinned(nil) {
+        WidgetEmptyState(
+          title: "选择监控端点", detail: "编辑小组件，选择要固定关注的域名", symbol: "pin")
+      } else if let focus = entry.selection.resolve(in: ordered) {
+        switch effectiveFamily {
+        case .systemLarge:
+          WidgetLargeOverviewView(entry: entry, ordered: ordered)
+        case .systemMedium:
+          mediumContent(focus)
+        default:
+          smallContent(focus)
+        }
+      } else {
+        WidgetEmptyState(
+          title: "端点已移除", detail: "请编辑小组件，重新选择监控端点", symbol: "pin.slash")
       }
     }
     .containerBackground(for: .widget) { Color(nsColor: .windowBackgroundColor) }
@@ -34,10 +47,18 @@ struct SSLExpiryWidgetView: View {
     let snapshot = snapshotByID[domain.id]
     let severity = snapshot?.severity(at: entry.date) ?? .unchecked
     return VStack(alignment: .leading, spacing: 0) {
-      Text(domain.displayName)
-        .font(.subheadline.weight(.semibold))
-        .lineLimit(2)
-        .truncationMode(.middle)
+      HStack(alignment: .firstTextBaseline, spacing: 5) {
+        if case .pinned = entry.selection {
+          Image(systemName: "pin.fill")
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .accessibilityHidden(true)
+        }
+        Text(domain.displayName)
+          .font(.subheadline.weight(.semibold))
+          .lineLimit(2)
+          .truncationMode(.middle)
+      }
       Spacer(minLength: 5)
       HStack(alignment: .center, spacing: 9) {
         CertificateValidityGauge(snapshot: snapshot, date: entry.date, size: 76)
@@ -59,49 +80,39 @@ struct SSLExpiryWidgetView: View {
   private func mediumContent(_ domain: WatchedDomain) -> some View {
     let snapshot = snapshotByID[domain.id]
     let severity = snapshot?.severity(at: entry.date) ?? .unchecked
-    return VStack(alignment: .leading, spacing: 0) {
+    return VStack(alignment: .leading, spacing: 5) {
       header
-      Divider().padding(.vertical, 8)
-      HStack(alignment: .top, spacing: 14) {
-        VStack(alignment: .leading, spacing: 5) {
+      HStack(alignment: .center, spacing: 9) {
+        CertificateValidityGauge(snapshot: snapshot, date: entry.date, size: 50)
+        VStack(alignment: .leading, spacing: 3) {
           Text(domain.displayName)
-            .font(.caption.weight(.semibold))
+            .font(.subheadline.weight(.semibold))
             .lineLimit(1)
             .truncationMode(.middle)
-          HStack(spacing: 8) {
-            CertificateValidityGauge(snapshot: snapshot, date: entry.date, size: 68)
-            statusLine(severity: severity)
+          HStack(spacing: 6) {
+            statusLine(severity: severity, snapshot: snapshot)
+            Spacer(minLength: 2)
+            if let snapshot {
+              Text(checkLabel(snapshot))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            }
           }
           expiryLine(snapshot)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-
-        if ordered.count > 1 {
-          VStack(alignment: .leading, spacing: 10) {
-            ForEach(Array(ordered.dropFirst().prefix(2))) { other in
-              WidgetCompactEndpointRow(
-                domain: other, snapshot: snapshotByID[other.id], date: entry.date)
-            }
+      }
+      if ordered.count > 1 {
+        Divider().padding(.vertical, 1)
+        VStack(alignment: .leading, spacing: 4) {
+          ForEach(Array(ordered.dropFirst().prefix(2))) { other in
+            WidgetCompactEndpointRow(
+              domain: other, snapshot: snapshotByID[other.id], date: entry.date)
           }
-          .frame(maxWidth: .infinity, alignment: .leading)
         }
       }
       Spacer(minLength: 0)
-      if let snapshot {
-        VStack(alignment: .leading, spacing: 2) {
-          Text("最近检查：\(snapshot.checkedAt.formatted(date: .abbreviated, time: .shortened))")
-          if snapshot.checkState == .failed {
-            let lastSuccess =
-              snapshot.lastSuccessfulCheckAt.map {
-                $0.formatted(date: .abbreviated, time: .omitted)
-              } ?? "尚无"
-            Text("最近成功：\(lastSuccess) · 连续失败 \(snapshot.consecutiveFailureCount) 次")
-          }
-        }
-        .font(.caption2)
-        .foregroundStyle(.secondary)
-        .lineLimit(1)
-      }
     }
     .accessibilityElement(children: .contain)
   }
@@ -128,7 +139,7 @@ struct SSLExpiryWidgetView: View {
           .font(.caption2.weight(.semibold))
           .accessibilityHint("证书数据已更新，请打开应用查看提醒状态")
       } else {
-        Text("\(entry.domains.count)")
+        Text(headerCountLabel)
           .font(.caption.weight(.semibold).monospacedDigit())
           .foregroundStyle(.secondary)
           .accessibilityLabel("监控 \(entry.domains.count) 个域名")
@@ -136,16 +147,30 @@ struct SSLExpiryWidgetView: View {
     }
   }
 
-  private func statusLine(severity: CertificateSeverity) -> some View {
-    HStack(spacing: 5) {
+  private var headerCountLabel: String {
+    entry.domains.count > 3 ? "前 3 / \(entry.domains.count)" : "\(entry.domains.count)"
+  }
+
+  private func statusLine(
+    severity: CertificateSeverity, snapshot: CertificateSnapshot? = nil
+  ) -> some View {
+    let statusText =
+      snapshot?.checkState == .failed
+      ? "\(severity.label) · 连续 \(snapshot?.consecutiveFailureCount ?? 0) 次" : severity.label
+    return HStack(spacing: 5) {
       Image(systemName: severity.symbol)
         .foregroundStyle(severity.tint)
         .accessibilityHidden(true)
-      Text(severity.label)
+      Text(statusText)
         .foregroundStyle(.primary)
-      Spacer(minLength: 2)
     }
     .font(.caption2.weight(.medium))
+  }
+
+  private func checkLabel(_ snapshot: CertificateSnapshot) -> String {
+    let checked = snapshot.checkedAt.formatted(date: .abbreviated, time: .shortened)
+    return entry.date.timeIntervalSince(snapshot.checkedAt) >= 86_400
+      ? "待更新 · \(checked)" : "检查 \(checked)"
   }
 
   @ViewBuilder
@@ -188,7 +213,8 @@ struct SSLExpiryWidgetView: View {
         let label = snapshot?.checkState == .failed ? "上次已知截止于" : "截止于"
         return "，\(label) \($0.formatted(date: .abbreviated, time: .omitted))"
       } ?? ""
+    let selectionState = entry.selection == .automatic ? "" : "固定关注，"
     return
-      "\(updateState)\(reminderState)\(domain.displayName)，\(remaining)\(expiry)\(failureState)"
+      "\(selectionState)\(updateState)\(reminderState)\(domain.displayName)，\(remaining)\(expiry)\(failureState)"
   }
 }

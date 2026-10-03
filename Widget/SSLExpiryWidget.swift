@@ -1,7 +1,6 @@
 import SwiftUI
 import WidgetKit
 
-@main
 struct SSLExpiryWidget: Widget {
   var body: some WidgetConfiguration {
     StaticConfiguration(kind: CertGlanceIdentity.widgetKind, provider: SSLExpiryProvider()) {
@@ -10,6 +9,14 @@ struct SSLExpiryWidget: Widget {
     }
     .configurationDisplayName("SSL 证书到期")
     .description("优先显示最需要处理的证书。")
-    .supportedFamilies([.systemSmall, .systemMedium])
+    .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+  }
+}
+
+@main
+struct CertGlanceWidgetBundle: WidgetBundle {
+  var body: some Widget {
+    SSLExpiryWidget()
+    PinnedEndpointWidget()
   }
 }

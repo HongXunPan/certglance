@@ -31,8 +31,8 @@ struct WidgetCompactEndpointRow: View {
 
   var body: some View {
     let severity = snapshot?.severity(at: date) ?? .unchecked
-    VStack(alignment: .leading, spacing: 3) {
-      HStack(spacing: 6) {
+    VStack(alignment: .leading, spacing: 2) {
+      HStack(spacing: 5) {
         Image(systemName: severity.symbol)
           .foregroundStyle(severity.tint)
           .accessibilityHidden(true)
@@ -40,25 +40,31 @@ struct WidgetCompactEndpointRow: View {
           .font(.caption.weight(.medium))
           .lineLimit(1)
           .truncationMode(.middle)
-      }
-      HStack(spacing: 4) {
-        Text(severity.label).font(.caption2).foregroundStyle(.secondary)
-        Spacer(minLength: 0)
-        if let days = snapshot?.daysRemaining(at: date), severity != .checkFailed,
-          severity != .untrusted
-        {
-          Text(days <= 0 ? "已过期" : "\(days) 天")
+        Spacer(minLength: 4)
+        if let days = snapshot?.daysRemaining(at: date), snapshot?.checkState == .trusted {
+          Text("\(max(days, 0)) 天")
             .font(.caption.weight(.semibold).monospacedDigit())
+        } else {
+          Text("—")
+            .font(.caption)
+            .foregroundStyle(.secondary)
         }
       }
-      if let snapshot, let expiry = snapshot.expiresAt {
-        Text(
-          "\(snapshot.checkState == .failed ? "已知到期" : "到期") \(expiry.formatted(.dateTime.month(.abbreviated).day()))"
-        )
-        .font(.caption2)
-        .foregroundStyle(.secondary)
-        .lineLimit(1)
+      HStack(spacing: 5) {
+        if let snapshot, let expiry = snapshot.expiresAt {
+          Text(
+            "\(snapshot.checkState == .failed ? "已知到期" : "到期") \(expiry.formatted(.dateTime.month(.abbreviated).day()))"
+          )
+        } else {
+          Text("等待首次检查")
+        }
+        Spacer(minLength: 4)
+        Text(severity.label)
+          .foregroundStyle(.primary)
       }
+      .font(.caption2)
+      .foregroundStyle(.secondary)
+      .lineLimit(1)
     }
     .accessibilityElement(children: .combine)
   }
@@ -71,13 +77,14 @@ struct WidgetEmptyState: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
+      Spacer(minLength: 0)
       Image(systemName: symbol)
         .font(.title2)
         .foregroundStyle(.secondary)
         .accessibilityHidden(true)
-      Spacer()
       Text(title).font(.headline)
       Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(3)
+      Spacer(minLength: 0)
     }
   }
 }

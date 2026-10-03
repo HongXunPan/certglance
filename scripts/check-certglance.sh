@@ -32,6 +32,12 @@ xcrun swiftc -swift-version 6 -parse-as-library "${swift_cache[@]}" \
   -o "${temp}/WidgetPlanningChecks"
 "${temp}/WidgetPlanningChecks"
 
+printf '[开始] Widget 展示规则\n'
+xcrun swiftc -swift-version 6 -parse-as-library "${swift_cache[@]}" \
+  Shared/DomainModels.swift Widget/WidgetDisplayModel.swift Tests/WidgetDisplayChecks.swift \
+  -o "${temp}/WidgetDisplayChecks"
+"${temp}/WidgetDisplayChecks"
+
 printf '[开始] 多域名检查队列\n'
 xcrun swiftc -swift-version 6 -parse-as-library "${swift_cache[@]}" \
   Shared/DomainModels.swift Shared/DomainCheckQueue.swift Shared/WidgetPlanning.swift \
@@ -43,5 +49,11 @@ xcrun swiftc -swift-version 6 -parse-as-library "${swift_cache[@]}" \
   Shared/DomainModels.swift Shared/SharedStore.swift Tests/StoreChecks.swift \
   -o "${temp}/StoreChecks"
 "${temp}/StoreChecks" "${temp}"
+
+printf '[开始] Widget 自动检查排他锁\n'
+xcrun swiftc -swift-version 6 -parse-as-library "${swift_cache[@]}" \
+  Shared/DomainModels.swift Shared/SharedStore.swift Tests/WidgetRefreshLeaseChecks.swift \
+  -o "${temp}/WidgetRefreshLeaseChecks"
+"${temp}/WidgetRefreshLeaseChecks" "${temp}/widget-lease"
 
 printf '[通过] 静态和定点规则检查完成；尚未验证签名安装与 WidgetKit 运行态。\n'
