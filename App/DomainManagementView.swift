@@ -4,51 +4,68 @@ struct DomainManagementView: View {
   @ObservedObject var model: DashboardModel
   @State private var domainToRemove: String?
   @State private var isShowingAddSheet = false
+  @State private var searchText = ""
+  @State private var displayFilter = EndpointDisplayFilter.all
 
   var body: some View {
     TimelineView(.periodic(from: .now, by: 3_600)) { context in
-      ScrollView {
-        VStack(alignment: .leading, spacing: 20) {
-          heading
-          if let storageError = model.storageError {
-            VStack(spacing: 12) {
-              ContentUnavailableView(
-                "共享数据不可用", systemImage: "externaldrive.badge.exclamationmark",
-                description: Text(storageError))
-              Button("修复后重新读取") { Task { await model.load() } }
-                .disabled(model.isChecking)
-            }
-          } else if model.domains.isEmpty {
+      List {
+        heading
+        if let storageError = model.storageError {
+          VStack(spacing: 12) {
             ContentUnavailableView(
-              "还没有监控端点", systemImage: "checkmark.shield",
-              description: Text("使用工具栏“＋”添加域名或粘贴 HTTPS 网址。")
-            )
-            .frame(maxWidth: .infinity)
-          } else {
-            VStack(alignment: .leading, spacing: 18) {
-              if let message = model.lastActionMessage {
-                HStack(spacing: 10) {
-                  Label(message, systemImage: "checkmark.circle.fill")
-                    .foregroundStyle(.secondary)
-                  Spacer(minLength: 0)
-                  Button("关闭") { model.dismissActionMessage() }
-                }
-                .padding(12)
-                .background(.quaternary, in: RoundedRectangle(cornerRadius: 12))
-              }
-              DashboardSummary(
-                domains: model.domains, snapshots: model.snapshots, date: context.date)
-              if !model.notificationsEnabled {
-                notificationCallout
-              }
-              cardGrid(at: context.date)
+              "共享数据不可用", systemImage: "externaldrive.badge.exclamationmark",
+              description: Text(storageError))
+            Button("修复后重新读取") { Task { await model.load() } }
+              .disabled(model.isChecking)
+          }
+        } else if model.domains.isEmpty {
+          ContentUnavailableView(
+            "还没有监控端点", systemImage: "checkmark.shield",
+            description: Text("使用工具栏“＋”添加域名或粘贴 HTTPS 网址。")
+          )
+        } else {
+          if let message = model.lastActionMessage {
+            HStack(spacing: 10) {
+              Label(message, systemImage: "checkmark.circle.fill")
+                .foregroundStyle(.secondary)
+              Spacer(minLength: 0)
+              Button("关闭") { model.dismissActionMessage() }
             }
           }
+          DashboardSummary(
+            domains: model.domains, snapshots: model.snapshots, date: context.date)
+          if !model.notificationsEnabled {
+            notificationCallout
+          }
+          filterControls
+          let ordered = visibleDomains(at: context.date)
+          if let focus = ordered.first {
+            Section(focusHeading(for: focus, at: context.date)) {
+              CertificateFocusCard(
+                domain: focus, snapshot: model.snapshot(for: focus.id), date: context.date,
+                onRemove: { domainToRemove = focus.id })
+            }
+            if ordered.count > 1 {
+              Section("其他端点") {
+                ForEach(Array(ordered.dropFirst())) { domain in
+                  CertificateEndpointRow(
+                    domain: domain, snapshot: model.snapshot(for: domain.id),
+                    date: context.date, onRemove: { domainToRemove = domain.id })
+                }
+              }
+            }
+          } else {
+            ContentUnavailableView(
+              "没有匹配的端点", systemImage: "magnifyingglass",
+              description: Text("请调整搜索内容或显示范围。"))
+          }
         }
-        .padding(20)
-        .frame(maxWidth: 960)
-        .frame(maxWidth: .infinity)
       }
+      .listStyle(.inset)
+      .searchable(text: $searchText, prompt: "搜索域名或端口")
+      .frame(maxWidth: 960)
+      .frame(maxWidth: .infinity)
     }
     .toolbar {
       Button {
@@ -109,35 +126,46 @@ struct DomainManagementView: View {
   private var heading: some View {
     VStack(alignment: .leading, spacing: 5) {
       Text("证书总览")
-        .font(.system(.largeTitle, design: .rounded, weight: .bold))
-      Text("监控 \(model.domains.count) 个 HTTPS 端点 · 优先呈现需要处理的证书")
+        .font(.system(.title2, design: .rounded, weight: .bold))
+      Text("监控 \(model.domains.count) 个 HTTPS 端点 · 按风险排序")
         .font(.subheadline)
         .foregroundStyle(.secondary)
     }
   }
 
-  private func cardGrid(at date: Date) -> some View {
+  private var filterControls: some View {
+    HStack {
+      Text("监控端点")
+        .font(.headline)
+      Spacer()
+      Picker("显示端点", selection: $displayFilter) {
+        Text("全部").tag(EndpointDisplayFilter.all)
+        Text("需处理").tag(EndpointDisplayFilter.needsAttention)
+      }
+      .pickerStyle(.segmented)
+      .labelsHidden()
+      .frame(width: 160)
+    }
+  }
+
+  private func visibleDomains(at date: Date) -> [WatchedDomain] {
     let ordered = DashboardOrder.sorted(model.domains, snapshots: model.snapshots, at: date)
-    return VStack(alignment: .leading, spacing: 14) {
-      if let focus = ordered.first {
-        Text("优先关注")
-          .font(.headline)
-        CertificateFocusCard(
-          domain: focus, snapshot: model.snapshot(for: focus.id), date: date,
-          onRemove: { domainToRemove = focus.id })
-      }
-      if ordered.count > 1 {
-        Text("其他端点")
-          .font(.headline)
-          .padding(.top, 4)
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 12)], spacing: 12) {
-          ForEach(Array(ordered.dropFirst())) { domain in
-            CertificateCompactCard(
-              domain: domain, snapshot: model.snapshot(for: domain.id), date: date,
-              onRemove: { domainToRemove = domain.id })
-          }
-        }
-      }
+    let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    return ordered.filter { domain in
+      let matchesSearch =
+        query.isEmpty || domain.displayName.localizedCaseInsensitiveContains(query)
+      let severity = model.snapshot(for: domain.id)?.severity(at: date) ?? .unchecked
+      let matchesFilter = displayFilter == .all || severity != .healthy
+      return matchesSearch && matchesFilter
+    }
+  }
+
+  private func focusHeading(for domain: WatchedDomain, at date: Date) -> String {
+    let severity = model.snapshot(for: domain.id)?.severity(at: date) ?? .unchecked
+    switch severity {
+    case .healthy: return "最近到期"
+    case .unchecked: return "等待首次检查"
+    default: return "优先关注"
     }
   }
 
@@ -153,4 +181,9 @@ struct DomainManagementView: View {
     .padding(12)
     .background(.quaternary, in: RoundedRectangle(cornerRadius: 12))
   }
+}
+
+private enum EndpointDisplayFilter: Hashable {
+  case all
+  case needsAttention
 }

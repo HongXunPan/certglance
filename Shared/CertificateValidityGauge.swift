@@ -19,13 +19,15 @@ struct CertificateValidityGauge: View {
           EmptyView()
         }
         .gaugeStyle(.accessoryCircularCapacity)
-        .tint(.accentColor)
+        .tint(severity.tint)
         .overlay {
           VStack(spacing: 0) {
             Text(remaining <= 0 ? "0" : "\(remaining)")
-              .font(.system(size: size * 0.27, weight: .bold, design: .rounded).monospacedDigit())
+              .font(
+                .system(size: max(size * 0.27, 16), weight: .bold, design: .rounded)
+                  .monospacedDigit())
             Text("天")
-              .font(.system(size: size * 0.13, weight: .medium))
+              .font(.system(size: max(size * 0.13, 9), weight: .medium))
           }
         }
         .frame(width: size, height: size)
@@ -37,9 +39,11 @@ struct CertificateValidityGauge: View {
       {
         VStack(spacing: 1) {
           Text(remaining <= 0 ? "0" : "\(remaining)")
-            .font(.system(size: size * 0.27, weight: .bold, design: .rounded).monospacedDigit())
+            .font(
+              .system(size: max(size * 0.27, 16), weight: .bold, design: .rounded)
+                .monospacedDigit())
           Text("天")
-            .font(.system(size: size * 0.13, weight: .medium))
+            .font(.system(size: max(size * 0.13, 9), weight: .medium))
         }
         .frame(width: size, height: size)
         .background(.quaternary, in: Circle())
@@ -50,7 +54,7 @@ struct CertificateValidityGauge: View {
           .font(.system(size: size * 0.38, weight: .semibold))
           .foregroundStyle(severity.tint)
           .frame(maxWidth: .infinity, maxHeight: .infinity)
-          .background(.quaternary, in: Circle())
+          .background(severity.tint.opacity(0.12), in: Circle())
           .accessibilityLabel(severity.label)
       }
     }

@@ -24,28 +24,22 @@ struct DashboardSummary: View {
       counts[.expired, default: 0] + counts[.checkFailed, default: 0]
       + counts[.untrusted, default: 0]
     let unchecked = counts[.unchecked, default: 0]
-    HStack(spacing: 0) {
-      metric("正常", value: healthy, symbol: "checkmark.shield.fill", tint: .green)
-      Divider()
-      metric("需关注", value: attention, symbol: "clock.badge.exclamationmark", tint: .orange)
-      Divider()
+    HStack(spacing: 8) {
       metric("异常", value: abnormal, symbol: "exclamationmark.shield.fill", tint: .red)
-      Divider()
+      metric("需关注", value: attention, symbol: "clock.badge.exclamationmark", tint: .orange)
+      metric("正常", value: healthy, symbol: "checkmark.shield.fill", tint: .green)
       metric("待检查", value: unchecked, symbol: "shield.lefthalf.filled", tint: .secondary)
     }
-    .padding(.vertical, 13)
-    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18))
+    .padding(.vertical, 6)
   }
 
   private func metric(_ title: String, value: Int, symbol: String, tint: Color) -> some View {
-    VStack(spacing: 4) {
-      HStack(spacing: 5) {
-        Image(systemName: symbol)
-          .foregroundStyle(tint)
-          .accessibilityHidden(true)
-        Text("\(value)")
-          .font(.system(.title3, design: .rounded, weight: .bold).monospacedDigit())
-      }
+    HStack(spacing: 5) {
+      Image(systemName: symbol)
+        .foregroundStyle(tint)
+        .accessibilityHidden(true)
+      Text("\(value)")
+        .font(.system(.headline, design: .rounded, weight: .bold).monospacedDigit())
       Text(title)
         .font(.caption)
         .foregroundStyle(.secondary)
@@ -58,7 +52,6 @@ struct DashboardSummary: View {
 
 struct CertificateCheckDetails: View {
   let snapshot: CertificateSnapshot?
-  let compact: Bool
 
   var body: some View {
     VStack(alignment: .leading, spacing: 3) {
@@ -76,7 +69,7 @@ struct CertificateCheckDetails: View {
         Text("尚未检查")
       }
     }
-    .font(compact ? .caption2 : .caption)
+    .font(.caption)
     .foregroundStyle(.secondary)
     .accessibilityElement(children: .combine)
   }
