@@ -16,6 +16,7 @@ final class DashboardModel: ObservableObject {
   private let store: (any SnapshotStore)?
   private let refresher = DashboardRefresher()
   private let notifications = NotificationCoordinator()
+  private var refreshRequested = false
 
   init() {
     do {
@@ -67,23 +68,31 @@ final class DashboardModel: ObservableObject {
       domains = updated
       snapshots = remaining
       WidgetCenter.shared.reloadTimelines(ofKind: CertGlanceIdentity.widgetKind)
-      try await notifications.synchronize(remaining, store: store)
+      try await notifications.synchronize(store: store)
     } catch {
       alertMessage = error.localizedDescription
     }
   }
 
   func refresh() async {
-    guard let store, !isChecking else { return }
+    guard let store else { return }
+    if isChecking {
+      refreshRequested = true
+      return
+    }
     isChecking = true
     defer { isChecking = false }
-    do {
-      snapshots = try await refresher.refresh(domains, store: store)
-      WidgetCenter.shared.reloadTimelines(ofKind: CertGlanceIdentity.widgetKind)
-      try await notifications.synchronize(snapshots, store: store)
-    } catch {
-      alertMessage = "检查或提醒未完成：\(error.localizedDescription)"
-    }
+    repeat {
+      refreshRequested = false
+      do {
+        _ = try await refresher.refresh(domains, store: store)
+        snapshots = try store.snapshots()
+        WidgetCenter.shared.reloadTimelines(ofKind: CertGlanceIdentity.widgetKind)
+        try await notifications.synchronize(store: store)
+      } catch {
+        alertMessage = "检查或提醒未完成：\(error.localizedDescription)"
+      }
+    } while refreshRequested
   }
 
   func requestNotifications() async {
@@ -92,7 +101,7 @@ final class DashboardModel: ObservableObject {
       let granted = try await notifications.requestAuthorization()
       await updateNotificationDescription()
       if granted {
-        try await notifications.synchronize(snapshots, store: store)
+        try await notifications.synchronize(store: store)
       } else {
         alertMessage = "未获得通知权限；可在系统设置中重新开启。"
       }

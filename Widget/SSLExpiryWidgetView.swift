@@ -36,13 +36,15 @@ struct SSLExpiryWidgetView: View {
       header
       Spacer(minLength: 8)
       focusMetric(snapshot, severity: severity)
+      expiryLine(snapshot)
+        .padding(.top, 2)
       Text(domain.hostname)
         .font(.headline)
         .lineLimit(2)
         .minimumScaleFactor(0.8)
         .padding(.top, 5)
       Spacer(minLength: 6)
-      statusLine(snapshot, severity: severity)
+      statusLine(severity: severity)
     }
     .accessibilityElement(children: .combine)
     .accessibilityLabel(accessibilityDescription(domain, snapshot: snapshot, severity: severity))
@@ -57,12 +59,14 @@ struct SSLExpiryWidgetView: View {
       HStack(alignment: .top, spacing: 18) {
         VStack(alignment: .leading, spacing: 0) {
           focusMetric(snapshot, severity: severity)
+          expiryLine(snapshot)
+            .padding(.top, 2)
           Text(domain.hostname)
             .font(.headline)
             .lineLimit(2)
             .minimumScaleFactor(0.8)
             .padding(.top, 5)
-          statusLine(snapshot, severity: severity).padding(.top, 7)
+          statusLine(severity: severity).padding(.top, 7)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -137,9 +141,7 @@ struct SSLExpiryWidgetView: View {
     .minimumScaleFactor(0.7)
   }
 
-  private func statusLine(_ snapshot: CertificateSnapshot?, severity: CertificateSeverity)
-    -> some View
-  {
+  private func statusLine(severity: CertificateSeverity) -> some View {
     HStack(spacing: 5) {
       Image(systemName: severity.symbol)
         .foregroundStyle(severity.tint)
@@ -147,36 +149,52 @@ struct SSLExpiryWidgetView: View {
       Text(severity.label)
         .foregroundStyle(.primary)
       Spacer(minLength: 2)
-      if let snapshot, snapshot.checkState != .failed, let expiry = snapshot.expiresAt {
-        Text(expiry, format: .dateTime.month(.abbreviated).day())
-          .foregroundStyle(.secondary)
-          .lineLimit(1)
-      }
     }
     .font(.caption2.weight(.medium))
+  }
+
+  @ViewBuilder
+  private func expiryLine(_ snapshot: CertificateSnapshot?) -> some View {
+    if let snapshot, let expiry = snapshot.expiresAt {
+      let prefix = snapshot.checkState == .failed ? "上次已知到期" : "到期"
+      Text("\(prefix) \(expiry.formatted(.dateTime.year().month(.abbreviated).day()))")
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+        .minimumScaleFactor(0.75)
+    }
   }
 
   private func compactRow(_ domain: WatchedDomain) -> some View {
     let snapshot = snapshotByHost[domain.hostname]
     let severity = snapshot?.severity(at: entry.date) ?? .unchecked
-    return HStack(spacing: 7) {
-      Image(systemName: severity.symbol)
-        .foregroundStyle(severity.tint)
-        .accessibilityHidden(true)
-      VStack(alignment: .leading, spacing: 2) {
+    return VStack(alignment: .leading, spacing: 3) {
+      HStack(spacing: 6) {
+        Image(systemName: severity.symbol)
+          .foregroundStyle(severity.tint)
+          .accessibilityHidden(true)
         Text(domain.hostname)
           .font(.caption.weight(.medium))
-          .lineLimit(3)
-          .minimumScaleFactor(0.85)
-        Text(severity.label).font(.caption2).foregroundStyle(.secondary)
+          .lineLimit(1)
+          .truncationMode(.middle)
       }
-      Spacer(minLength: 0)
-      if let days = snapshot?.daysRemaining(at: entry.date), severity != .checkFailed,
-        severity != .untrusted
-      {
-        Text(days <= 0 ? "已过期" : "\(days) 天")
-          .font(.caption.weight(.semibold).monospacedDigit())
-          .foregroundStyle(.primary)
+      HStack(spacing: 4) {
+        Text(severity.label).font(.caption2).foregroundStyle(.secondary)
+        Spacer(minLength: 0)
+        if let days = snapshot?.daysRemaining(at: entry.date), severity != .checkFailed,
+          severity != .untrusted
+        {
+          Text(days <= 0 ? "已过期" : "\(days) 天")
+            .font(.caption.weight(.semibold).monospacedDigit())
+        }
+      }
+      if let snapshot, let expiry = snapshot.expiresAt {
+        Text(
+          "\(snapshot.checkState == .failed ? "已知到期" : "到期") \(expiry.formatted(.dateTime.month(.abbreviated).day()))"
+        )
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
       }
     }
     .accessibilityElement(children: .combine)

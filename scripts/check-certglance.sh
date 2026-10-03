@@ -26,6 +26,12 @@ xcrun swiftc -swift-version 6 -parse-as-library "${swift_cache[@]}" \
   -o "${temp}/ModelChecks"
 "${temp}/ModelChecks"
 
+printf '[开始] Widget 时间线与分批规则\n'
+xcrun swiftc -swift-version 6 -parse-as-library "${swift_cache[@]}" \
+  Shared/DomainModels.swift Shared/WidgetPlanning.swift Tests/WidgetPlanningChecks.swift \
+  -o "${temp}/WidgetPlanningChecks"
+"${temp}/WidgetPlanningChecks"
+
 printf '[开始] 文件桥接仓储\n'
 xcrun swiftc -swift-version 6 -parse-as-library "${swift_cache[@]}" \
   Shared/DomainModels.swift Shared/SharedStore.swift Tests/StoreChecks.swift \

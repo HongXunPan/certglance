@@ -5,8 +5,21 @@ struct NotificationMoment: Sendable {
   let date: Date?
 }
 
+enum NotificationSchedulingAction: Equatable, Sendable {
+  case future(Date)
+  case immediate
+  case skip
+}
+
 enum NotificationPolicy {
   static let thresholds = [30, 7, 1]
+
+  static func schedulingAction(
+    for moment: NotificationMoment, alreadyPending: Bool, tokenRecorded: Bool
+  ) -> NotificationSchedulingAction {
+    if let date = moment.date { return alreadyPending ? .skip : .future(date) }
+    return alreadyPending || tokenRecorded ? .skip : .immediate
+  }
 
   static func moments(expiresAt: Date, now: Date) -> [NotificationMoment] {
     if expiresAt <= now { return [NotificationMoment(threshold: 0, date: nil)] }

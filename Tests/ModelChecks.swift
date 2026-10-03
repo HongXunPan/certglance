@@ -55,6 +55,23 @@ struct ModelChecks {
     let expired = NotificationPolicy.moments(
       expiresAt: now.addingTimeInterval(-86_400), now: now)
     expect(expired.map(\.threshold) == [0], "过期证书只应计划一次过期提醒")
+    expect(
+      NotificationPolicy.schedulingAction(
+        for: future[0], alreadyPending: true, tokenRecorded: false) == .skip,
+      "已排程的未来提醒不能被改成即时提醒")
+    expect(
+      NotificationPolicy.schedulingAction(
+        for: future[0], alreadyPending: false, tokenRecorded: false)
+        == .future(future[0].date!),
+      "未排程的未来提醒应保留原触发日期")
+    expect(
+      NotificationPolicy.schedulingAction(
+        for: withinSeven[0], alreadyPending: false, tokenRecorded: false) == .immediate,
+      "刚进入提醒窗口时应立即提醒")
+    expect(
+      NotificationPolicy.schedulingAction(
+        for: withinSeven[0], alreadyPending: true, tokenRecorded: false) == .skip,
+      "已在待投递队列中的即时提醒不得重复安排")
     print("模型定点检查通过")
   }
 

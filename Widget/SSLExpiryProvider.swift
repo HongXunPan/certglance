@@ -31,28 +31,39 @@ struct SSLExpiryProvider: TimelineProvider {
     let reply = TimelineReply(completion)
     Task {
       var entry = cachedEntry()
+      var reloadInterval = WidgetPlanning.staleInterval
       do {
         let store = try FileSnapshotStore(createIfNeeded: false)
         let domains = try store.domains()
         let snapshots = try store.snapshots()
-        let snapshotHosts = Set(snapshots.map(\.hostname))
-        let domainHosts = Set(domains.map(\.hostname))
-        let stale =
-          snapshotHosts != domainHosts
-          || snapshots.contains { Date().timeIntervalSince($0.checkedAt) >= 12 * 3_600 }
-        if !domains.isEmpty && stale {
-          let refreshed = try await DashboardRefresher().refresh(domains, store: store)
-          entry = SSLExpiryEntry(
-            date: .now, domains: domains, snapshots: refreshed, errorMessage: nil)
-          try await NotificationCoordinator().synchronize(refreshed, store: store)
+        let due = WidgetPlanning.domainsNeedingCheck(domains, snapshots: snapshots, at: .now)
+        if !due.isEmpty {
+          _ = try await DashboardRefresher().refresh(
+            Array(due.prefix(WidgetPlanning.maximumChecksPerTimeline)), store: store)
+          try await NotificationCoordinator().synchronize(store: store)
+        }
+        let currentDomains = try store.domains()
+        let currentSnapshots = try store.snapshots()
+        entry = SSLExpiryEntry(
+          date: .now, domains: currentDomains, snapshots: currentSnapshots, errorMessage: nil)
+        if !WidgetPlanning.domainsNeedingCheck(
+          currentDomains, snapshots: currentSnapshots, at: .now
+        ).isEmpty {
+          reloadInterval = WidgetPlanning.catchUpInterval
         }
       } catch {
         entry = SSLExpiryEntry(
           date: .now, domains: entry.domains,
           snapshots: entry.snapshots, errorMessage: error.localizedDescription)
       }
+      let now = Date()
+      let entries = WidgetPlanning.timelineDates(snapshots: entry.snapshots, from: now).map {
+        SSLExpiryEntry(
+          date: $0, domains: entry.domains,
+          snapshots: entry.snapshots, errorMessage: entry.errorMessage)
+      }
       reply.complete(
-        Timeline(entries: [entry], policy: .after(.now.addingTimeInterval(12 * 3_600))))
+        Timeline(entries: entries, policy: .after(now.addingTimeInterval(reloadInterval))))
     }
   }
 
