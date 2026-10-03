@@ -45,6 +45,24 @@ struct ModelChecks {
     expect(snapshot(days: 60, state: .untrusted).severity(at: now) == .untrusted, "不受信任不得显示为正常")
     expect(snapshot(days: 60, state: .failed).severity(at: now) == .checkFailed, "连接失败不得显示为正常")
 
+    let validity = CertificateSnapshot(
+      hostname: "example.com", checkedAt: now,
+      expiresAt: now.addingTimeInterval(45 * 86_400),
+      checkState: .trusted, detail: nil,
+      validFrom: now.addingTimeInterval(-45 * 86_400))
+    expect(validity.validityRemainingFraction(at: now) == 0.5, "圆环应表示完整有效期剩余比例")
+    expect(
+      validity.validityRemainingFraction(at: now.addingTimeInterval(-50 * 86_400)) == 1,
+      "有效期开始前比例应限制为满环")
+    expect(
+      validity.validityRemainingFraction(at: now.addingTimeInterval(50 * 86_400)) == 0,
+      "到期后比例应限制为零")
+    expect(snapshot(days: 45).validityRemainingFraction(at: now) == nil, "旧快照不得伪造比例")
+    let invalidValidity = CertificateSnapshot(
+      hostname: "example.com", checkedAt: now, expiresAt: now,
+      checkState: .trusted, detail: nil, validFrom: now)
+    expect(invalidValidity.validityRemainingFraction(at: now) == nil, "无效证书周期不得展示圆环")
+
     let domains = ["healthy.example", "expired.example"].map {
       WatchedDomain(hostname: $0, addedAt: now)
     }

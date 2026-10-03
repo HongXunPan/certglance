@@ -3,47 +3,56 @@ import SwiftUI
 struct DomainManagementView: View {
   @ObservedObject var model: DashboardModel
   @State private var domainToRemove: String?
+  @State private var isShowingAddSheet = false
 
   var body: some View {
-    VStack(spacing: 0) {
-      TimelineView(.periodic(from: .now, by: 3_600)) { context in
-        ScrollView {
-          VStack(alignment: .leading, spacing: 20) {
-            heading
-            if let storageError = model.storageError {
-              ContentUnavailableView(
-                "共享数据不可用", systemImage: "externaldrive.badge.exclamationmark",
-                description: Text(storageError))
-            } else {
+    TimelineView(.periodic(from: .now, by: 3_600)) { context in
+      ScrollView {
+        VStack(alignment: .leading, spacing: 20) {
+          heading
+          if let storageError = model.storageError {
+            ContentUnavailableView(
+              "共享数据不可用", systemImage: "externaldrive.badge.exclamationmark",
+              description: Text(storageError))
+          } else if model.domains.isEmpty {
+            ContentUnavailableView(
+              "还没有监控端点", systemImage: "checkmark.shield",
+              description: Text("使用工具栏“＋”添加域名或粘贴 HTTPS 网址。")
+            )
+            .frame(maxWidth: .infinity)
+          } else {
+            VStack(alignment: .leading, spacing: 18) {
               DashboardSummary(
                 domains: model.domains, snapshots: model.snapshots, date: context.date)
-              inputSection
-              if model.domains.isEmpty {
-                ContentUnavailableView(
-                  "还没有监控端点", systemImage: "checkmark.shield",
-                  description: Text("添加域名或粘贴 HTTPS 网址，证书状态会出现在这里及桌面小组件中。")
-                )
-                .frame(maxWidth: .infinity)
-              } else {
-                cardGrid(at: context.date)
+              if !model.notificationsEnabled {
+                notificationCallout
               }
+              cardGrid(at: context.date)
             }
           }
-          .padding(20)
-          .frame(maxWidth: 960)
-          .frame(maxWidth: .infinity)
         }
+        .padding(20)
+        .frame(maxWidth: 960)
+        .frame(maxWidth: .infinity)
       }
-      Divider()
-      notificationBar
     }
     .toolbar {
+      Button {
+        isShowingAddSheet = true
+      } label: {
+        Label("添加端点", systemImage: "plus")
+      }
+      .disabled(model.storageError != nil)
+
       Button {
         Task { await model.refresh() }
       } label: {
         Label("检查全部端点", systemImage: "arrow.clockwise")
       }
       .disabled(model.isChecking || model.domains.isEmpty)
+    }
+    .sheet(isPresented: $isShowingAddSheet) {
+      AddEndpointSheet(model: model)
     }
     .overlay(alignment: .top) {
       if model.isChecking {
@@ -93,59 +102,39 @@ struct DomainManagementView: View {
     }
   }
 
-  private var inputSection: some View {
-    VStack(alignment: .leading, spacing: 9) {
-      Text("添加监控")
-        .font(.headline)
-      HStack(spacing: 10) {
-        TextField("域名或 HTTPS 网址", text: $model.input)
-          .textFieldStyle(.roundedBorder)
-          .onSubmit { Task { await model.addDomain() } }
-          .onChange(of: model.input) { _, _ in model.inputError = nil }
-          .accessibilityLabel("要添加的 HTTPS 端点")
-        Button("添加") { Task { await model.addDomain() } }
-          .disabled(model.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-      }
-      if let error = model.inputError {
-        Label(error, systemImage: "exclamationmark.circle")
-          .font(.caption)
-          .foregroundStyle(.red)
-      } else if let endpoint = try? DomainInput.parseEndpoint(model.input) {
-        let id = EndpointIdentity.key(hostname: endpoint.hostname, port: endpoint.port)
-        Label("将检查 HTTPS · \(id)", systemImage: "link")
-          .font(.caption)
-          .foregroundStyle(.secondary)
-      } else {
-        Text("支持 example.com、example.com:8443 或带路径的 HTTPS 网址。")
-          .font(.caption)
-          .foregroundStyle(.secondary)
-      }
-    }
-    .padding(16)
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18))
-  }
-
   private func cardGrid(at date: Date) -> some View {
-    LazyVGrid(columns: [GridItem(.adaptive(minimum: 230), spacing: 12)], spacing: 12) {
-      ForEach(DashboardOrder.sorted(model.domains, snapshots: model.snapshots, at: date)) {
-        domain in
-        CertificateDashboardCard(
-          domain: domain, snapshot: model.snapshot(for: domain.id), date: date,
-          onRemove: { domainToRemove = domain.id })
+    let ordered = DashboardOrder.sorted(model.domains, snapshots: model.snapshots, at: date)
+    return VStack(alignment: .leading, spacing: 14) {
+      if let focus = ordered.first {
+        Text("优先关注")
+          .font(.headline)
+        CertificateFocusCard(
+          domain: focus, snapshot: model.snapshot(for: focus.id), date: date,
+          onRemove: { domainToRemove = focus.id })
+      }
+      if ordered.count > 1 {
+        Text("其他端点")
+          .font(.headline)
+          .padding(.top, 4)
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 12)], spacing: 12) {
+          ForEach(Array(ordered.dropFirst())) { domain in
+            CertificateCompactCard(
+              domain: domain, snapshot: model.snapshot(for: domain.id), date: date,
+              onRemove: { domainToRemove = domain.id })
+          }
+        }
       }
     }
   }
 
-  private var notificationBar: some View {
+  private var notificationCallout: some View {
     HStack(spacing: 12) {
       Label(model.notificationDescription, systemImage: "bell.badge")
         .foregroundStyle(.secondary)
       Spacer()
       Button("开启通知") { Task { await model.requestNotifications() } }
-        .disabled(model.storageError != nil || model.notificationsEnabled)
     }
-    .padding(.horizontal, 20)
-    .padding(.vertical, 12)
+    .padding(12)
+    .background(.quaternary, in: RoundedRectangle(cornerRadius: 12))
   }
 }

@@ -108,6 +108,7 @@ struct CertificateSnapshot: Codable, Identifiable, Sendable {
   let hostname: String
   let port: Int
   let checkedAt: Date
+  let validFrom: Date?
   let expiresAt: Date?
   let checkState: CertificateCheckState
   let detail: String?
@@ -117,11 +118,12 @@ struct CertificateSnapshot: Codable, Identifiable, Sendable {
   init(
     hostname: String, checkedAt: Date, expiresAt: Date?, checkState: CertificateCheckState,
     detail: String?, lastSuccessfulCheckAt: Date? = nil, consecutiveFailureCount: Int = 0,
-    port: Int = 443
+    port: Int = 443, validFrom: Date? = nil
   ) {
     self.hostname = hostname
     self.port = port
     self.checkedAt = checkedAt
+    self.validFrom = validFrom
     self.expiresAt = expiresAt
     self.checkState = checkState
     self.detail = detail
@@ -130,7 +132,7 @@ struct CertificateSnapshot: Codable, Identifiable, Sendable {
   }
 
   private enum CodingKeys: String, CodingKey {
-    case hostname, port, checkedAt, expiresAt, checkState, detail
+    case hostname, port, checkedAt, validFrom, expiresAt, checkState, detail
     case lastSuccessfulCheckAt, consecutiveFailureCount
   }
 
@@ -139,6 +141,7 @@ struct CertificateSnapshot: Codable, Identifiable, Sendable {
     hostname = try values.decode(String.self, forKey: .hostname)
     port = try EndpointIdentity.decodePort(from: values)
     checkedAt = try values.decode(Date.self, forKey: .checkedAt)
+    validFrom = try values.decodeIfPresent(Date.self, forKey: .validFrom)
     expiresAt = try values.decodeIfPresent(Date.self, forKey: .expiresAt)
     checkState = try values.decode(CertificateCheckState.self, forKey: .checkState)
     detail = try values.decodeIfPresent(String.self, forKey: .detail)
@@ -159,6 +162,12 @@ struct CertificateSnapshot: Codable, Identifiable, Sendable {
   func daysRemaining(at date: Date) -> Int? {
     guard let expiresAt else { return nil }
     return Int(ceil(expiresAt.timeIntervalSince(date) / 86_400))
+  }
+
+  func validityRemainingFraction(at date: Date) -> Double? {
+    guard let validFrom, let expiresAt, expiresAt > validFrom else { return nil }
+    let fraction = expiresAt.timeIntervalSince(date) / expiresAt.timeIntervalSince(validFrom)
+    return min(1, max(0, fraction))
   }
 
   func severity(at date: Date) -> CertificateSeverity {

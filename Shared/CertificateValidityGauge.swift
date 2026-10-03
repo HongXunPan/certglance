@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct CertificateCountdownGauge: View {
+struct CertificateValidityGauge: View {
   let snapshot: CertificateSnapshot?
   let date: Date
   let size: CGFloat
@@ -12,13 +12,14 @@ struct CertificateCountdownGauge: View {
   var body: some View {
     Group {
       if let snapshot, snapshot.checkState == .trusted,
-        let remaining = snapshot.daysRemaining(at: date)
+        let remaining = snapshot.daysRemaining(at: date),
+        let fraction = snapshot.validityRemainingFraction(at: date)
       {
-        Gauge(value: Double(min(30, max(0, remaining))), in: 0...30) {
+        Gauge(value: fraction, in: 0...1) {
           EmptyView()
         }
         .gaugeStyle(.accessoryCircularCapacity)
-        .tint(severity.tint)
+        .tint(.accentColor)
         .overlay {
           VStack(spacing: 0) {
             Text(remaining <= 0 ? "0" : "\(remaining)")
@@ -30,7 +31,20 @@ struct CertificateCountdownGauge: View {
         .frame(width: size, height: size)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(remaining <= 0 ? "证书已过期" : "证书剩余 \(remaining) 天")
-        .accessibilityHint("圆环表示距离到期日在 30 天窗口内的位置；超过 30 天时显示满环")
+        .accessibilityHint("圆环表示证书完整有效期中剩余的比例")
+      } else if let snapshot, snapshot.checkState == .trusted,
+        let remaining = snapshot.daysRemaining(at: date)
+      {
+        VStack(spacing: 1) {
+          Text(remaining <= 0 ? "0" : "\(remaining)")
+            .font(.system(size: size * 0.27, weight: .bold, design: .rounded).monospacedDigit())
+          Text("天")
+            .font(.system(size: size * 0.13, weight: .medium))
+        }
+        .frame(width: size, height: size)
+        .background(.quaternary, in: Circle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(remaining <= 0 ? "证书已过期，有效期比例待更新" : "证书剩余 \(remaining) 天，有效期比例待更新")
       } else {
         Image(systemName: severity.symbol)
           .font(.system(size: size * 0.38, weight: .semibold))

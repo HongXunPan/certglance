@@ -25,9 +25,10 @@ struct StoreChecks {
     expect(try widgetStore.domains().count == 2, "Widget 应可只读配置")
 
     let expiry = now.addingTimeInterval(5 * 86_400)
+    let validFrom = now.addingTimeInterval(-85 * 86_400)
     let trusted = CertificateSnapshot(
       hostname: first.hostname, checkedAt: now, expiresAt: expiry,
-      checkState: .trusted, detail: nil)
+      checkState: .trusted, detail: nil, validFrom: validFrom)
     let other = CertificateSnapshot(
       hostname: second.hostname, checkedAt: now,
       expiresAt: now.addingTimeInterval(60 * 86_400), checkState: .trusted, detail: nil)
@@ -43,6 +44,7 @@ struct StoreChecks {
     let afterFailure = try store.mergeSnapshots([failed])
     expect(afterFailure.first?.checkState == .failed, "失败不能被旧成功状态覆盖")
     expect(afterFailure.first?.expiresAt == expiry, "失败应保留已知截止时间")
+    expect(afterFailure.first?.validFrom == validFrom, "失败应保留同一证书的有效期起点")
     expect(
       afterFailure.first?.lastSuccessfulCheckAt == now
         && afterFailure.first?.consecutiveFailureCount == 1,
@@ -56,12 +58,16 @@ struct StoreChecks {
     expect(afterSecondFailure.first?.consecutiveFailureCount == 2, "连续失败应累积")
     let untrusted = CertificateSnapshot(
       hostname: first.hostname, checkedAt: now.addingTimeInterval(30),
-      expiresAt: expiry, checkState: .untrusted, detail: "证书不受信任")
+      expiresAt: expiry, checkState: .untrusted, detail: "证书不受信任",
+      validFrom: validFrom.addingTimeInterval(10))
     let afterObserved = try store.mergeSnapshots([untrusted])
     expect(
       afterObserved.first?.lastSuccessfulCheckAt == untrusted.checkedAt
         && afterObserved.first?.consecutiveFailureCount == 0,
       "读取到不受信任证书仍应视为探测成功并清零失败")
+    expect(
+      afterObserved.first?.validFrom == untrusted.validFrom,
+      "新证书应替换有效期起点，不能与旧快照拼接")
     let afterOlderResult = try store.mergeSnapshots([trusted])
     expect(afterOlderResult.first?.checkState == .untrusted, "较旧的检查结果不得覆盖新结果")
 
@@ -82,7 +88,8 @@ struct StoreChecks {
     let migrated = try store.snapshots()
     expect(
       migrated.first?.lastSuccessfulCheckAt == now
-        && migrated.first?.consecutiveFailureCount == 0 && migrated.first?.port == 443,
+        && migrated.first?.consecutiveFailureCount == 0 && migrated.first?.port == 443
+        && migrated.first?.validFrom == nil,
       "旧版快照应推断成功时间并补齐失败次数")
     let alternate = WatchedDomain(hostname: first.hostname, port: 8443, addedAt: now)
     try store.replaceDomains([first, alternate, second])

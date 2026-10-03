@@ -17,7 +17,8 @@ struct SSLExpiryProvider: TimelineProvider {
         CertificateSnapshot(
           hostname: "example.com", checkedAt: .now,
           expiresAt: .now.addingTimeInterval(6 * 86_400),
-          checkState: .trusted, detail: nil)
+          checkState: .trusted, detail: nil,
+          validFrom: .now.addingTimeInterval(-84 * 86_400))
       ],
       errorMessage: nil
     )

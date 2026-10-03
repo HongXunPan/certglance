@@ -42,8 +42,11 @@ final class DashboardModel: ObservableObject {
     if !domains.isEmpty { await refresh() }
   }
 
-  func addDomain() async {
-    guard let store else { return }
+  func addDomain() async -> Bool {
+    guard let store else {
+      inputError = storageError ?? "共享数据不可用。"
+      return false
+    }
     do {
       let endpoint = try DomainInput.parseEndpoint(input)
       let domain = WatchedDomain(
@@ -57,13 +60,11 @@ final class DashboardModel: ObservableObject {
       input = ""
       inputError = nil
       WidgetCenter.shared.reloadTimelines(ofKind: CertGlanceIdentity.widgetKind)
-      await refresh()
+      Task { await refresh() }
+      return true
     } catch {
-      if error is DomainInputError {
-        inputError = error.localizedDescription
-      } else {
-        alertMessage = error.localizedDescription
-      }
+      inputError = error.localizedDescription
+      return false
     }
   }
 

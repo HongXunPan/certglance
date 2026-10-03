@@ -37,7 +37,8 @@ struct CertificateChecker: Sendable {
       return CertificateSnapshot(
         hostname: domain.hostname, checkedAt: checkedAt, expiresAt: observed.expiresAt,
         checkState: observed.isTrusted ? .trusted : .untrusted,
-        detail: observed.isTrusted ? nil : "证书链或域名校验未通过", port: domain.port
+        detail: observed.isTrusted ? nil : "证书链或域名校验未通过", port: domain.port,
+        validFrom: observed.validFrom
       )
     }
     return CertificateSnapshot(
@@ -60,6 +61,7 @@ struct CertificateChecker: Sendable {
 }
 
 private struct ObservedCertificate: Sendable {
+  let validFrom: Date?
   let expiresAt: Date
   let isTrusted: Bool
 }
@@ -106,7 +108,9 @@ private final class CertificateTrustCapture: NSObject, URLSessionDelegate, URLSe
       return
     }
     lock.lock()
-    value = ObservedCertificate(expiresAt: expiresAt, isTrusted: isTrusted)
+    value = ObservedCertificate(
+      validFrom: SecCertificateCopyNotValidBeforeDate(leaf) as Date?,
+      expiresAt: expiresAt, isTrusted: isTrusted)
     lock.unlock()
     completionHandler(.cancelAuthenticationChallenge, nil)
   }

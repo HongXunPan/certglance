@@ -104,7 +104,8 @@ final class FileSnapshotStore: SnapshotStore, @unchecked Sendable {
           expiresAt: result.expiresAt ?? (succeeded ? nil : old?.expiresAt),
           checkState: result.checkState, detail: result.detail,
           lastSuccessfulCheckAt: succeeded ? result.checkedAt : old?.lastSuccessfulCheckAt,
-          consecutiveFailureCount: failureCount, port: result.port)
+          consecutiveFailureCount: failureCount, port: result.port,
+          validFrom: succeeded ? result.validFrom : old?.validFrom)
       }
       let merged = byHost.values.filter { hosts.contains($0.id) }
         .sorted { $0.id < $1.id }

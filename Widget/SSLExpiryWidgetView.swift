@@ -33,23 +33,23 @@ struct SSLExpiryWidgetView: View {
     let snapshot = snapshotByID[domain.id]
     let severity = snapshot?.severity(at: entry.date) ?? .unchecked
     return VStack(alignment: .leading, spacing: 0) {
-      header
-      Spacer(minLength: 3)
-      HStack(spacing: 8) {
-        CertificateCountdownGauge(snapshot: snapshot, date: entry.date, size: 64)
-        VStack(alignment: .leading, spacing: 3) {
-          Text(severity.label)
-            .font(.caption2.weight(.semibold))
-            .foregroundStyle(severity.tint)
-          expiryLine(snapshot)
-        }
-      }
       Text(domain.displayName)
-        .font(.caption.weight(.semibold))
+        .font(.subheadline.weight(.semibold))
         .lineLimit(2)
         .truncationMode(.middle)
-        .padding(.top, 3)
+      Spacer(minLength: 5)
+      HStack(alignment: .center, spacing: 9) {
+        CertificateValidityGauge(snapshot: snapshot, date: entry.date, size: 76)
+        statusLine(severity: severity)
+      }
+      expiryLine(snapshot)
+        .padding(.top, 4)
       Spacer(minLength: 0)
+      if entry.errorMessage != nil {
+        Label("更新失败", systemImage: "exclamationmark.triangle")
+          .font(.caption2)
+          .foregroundStyle(.secondary)
+      }
     }
     .accessibilityElement(children: .combine)
     .accessibilityLabel(accessibilityDescription(domain, snapshot: snapshot, severity: severity))
@@ -60,18 +60,18 @@ struct SSLExpiryWidgetView: View {
     let severity = snapshot?.severity(at: entry.date) ?? .unchecked
     return VStack(alignment: .leading, spacing: 0) {
       header
-      Divider().padding(.vertical, 10)
-      HStack(alignment: .top, spacing: 18) {
-        HStack(alignment: .center, spacing: 8) {
-          CertificateCountdownGauge(snapshot: snapshot, date: entry.date, size: 68)
-          VStack(alignment: .leading, spacing: 5) {
-            Text(domain.displayName)
-              .font(.subheadline.weight(.semibold))
-              .lineLimit(2)
-              .truncationMode(.middle)
+      Divider().padding(.vertical, 8)
+      HStack(alignment: .top, spacing: 14) {
+        VStack(alignment: .leading, spacing: 5) {
+          Text(domain.displayName)
+            .font(.caption.weight(.semibold))
+            .lineLimit(1)
+            .truncationMode(.middle)
+          HStack(spacing: 8) {
+            CertificateValidityGauge(snapshot: snapshot, date: entry.date, size: 68)
             statusLine(severity: severity)
-            expiryLine(snapshot)
           }
+          expiryLine(snapshot)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -97,7 +97,7 @@ struct SSLExpiryWidgetView: View {
 
   private var header: some View {
     HStack {
-      Label("CertGlance", systemImage: "lock.shield")
+      Label("证书到期", systemImage: "lock.shield")
         .font(.caption.weight(.semibold))
         .foregroundStyle(.secondary)
       Spacer()
