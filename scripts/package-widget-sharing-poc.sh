@@ -292,7 +292,7 @@ if [[ "${diagnostic_without_helper}" == true ]]; then
 else
   helper_status="已嵌入：${helper_identifier}"
   static_result='同证书签名、嵌入扩展与助手、构建号、签名权限、DMG 内签名和 SHA-256 均已核验'
-  unverified='用户安装、助手首次启动、旧版扩展定点退出、系统小组件显示与新回执运行态'
+  unverified='用户首次安装、助手旧扩展修复、受控替换命令实际运行、原桌面组件位置、系统小组件显示与新回执运行态'
 fi
 cat >"${report_path}" <<EOF
 验证对象：SSL Widget 独立假数据 PoC
