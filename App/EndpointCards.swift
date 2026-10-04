@@ -61,14 +61,13 @@ struct CertificateFocusCard: View {
           }
         }
       }
-      DisclosureGroup("证书详情", isExpanded: $detailsExpanded) {
+      CertificateDetailsDisclosure("证书详情", isExpanded: $detailsExpanded) {
         VStack(alignment: .leading, spacing: 5) {
           CertificateValidityDetails(snapshot: snapshot, date: date)
           CertificateCheckDetails(snapshot: snapshot)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
       }
-      .font(.caption)
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(14)
@@ -76,6 +75,7 @@ struct CertificateFocusCard: View {
     .overlay {
       RoundedRectangle(cornerRadius: 14)
         .strokeBorder(severity.tint.opacity(0.18), lineWidth: 1)
+        .allowsHitTesting(false)
     }
     .accessibilityElement(children: .contain)
   }

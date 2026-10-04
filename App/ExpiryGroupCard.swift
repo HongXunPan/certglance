@@ -60,7 +60,7 @@ struct ExpiryGroupCard: View {
           .font(.caption)
           .foregroundStyle(.secondary)
       }
-      DisclosureGroup("查看各端点详情", isExpanded: $detailsExpanded) {
+      CertificateDetailsDisclosure("查看各端点详情", isExpanded: $detailsExpanded) {
         VStack(alignment: .leading, spacing: 4) {
           ForEach(item.domains) { domain in
             CertificateEndpointRow(
@@ -70,7 +70,6 @@ struct ExpiryGroupCard: View {
           }
         }
       }
-      .font(.caption)
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(14)
@@ -78,6 +77,7 @@ struct ExpiryGroupCard: View {
     .overlay {
       RoundedRectangle(cornerRadius: 14)
         .strokeBorder(item.severity.tint.opacity(0.18), lineWidth: 1)
+        .allowsHitTesting(false)
     }
     .accessibilityElement(children: .contain)
   }

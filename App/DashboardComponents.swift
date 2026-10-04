@@ -50,6 +50,47 @@ struct DashboardSummary: View {
   }
 }
 
+struct CertificateDetailsDisclosure<Content: View>: View {
+  let title: String
+  @Binding var isExpanded: Bool
+  let content: Content
+
+  init(
+    _ title: String, isExpanded: Binding<Bool>, @ViewBuilder content: () -> Content
+  ) {
+    self.title = title
+    self._isExpanded = isExpanded
+    self.content = content()
+  }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 6) {
+      Button {
+        isExpanded.toggle()
+      } label: {
+        HStack(spacing: 6) {
+          Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+            .font(.caption2.weight(.semibold))
+            .frame(width: 12)
+            .accessibilityHidden(true)
+          Text(title)
+        }
+        .font(.caption.weight(.medium))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+      .accessibilityLabel(title)
+      .accessibilityValue(isExpanded ? "已展开" : "已收起")
+      .accessibilityHint(isExpanded ? "按下以收起详情" : "按下以展开详情")
+      if isExpanded {
+        content
+      }
+    }
+  }
+}
+
 struct CertificateCheckDetails: View {
   let snapshot: CertificateSnapshot?
 
