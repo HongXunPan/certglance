@@ -23,8 +23,10 @@ struct CertGlanceVisualQA {
     let date = Date(timeIntervalSince1970: 1_780_000_000)
     let normal = normalFixture(at: date)
     let stress = stressFixture(at: date)
+    let overflow = overflowFixture(from: normal, at: date)
     precondition(Set(normal.domains.map(\.id)).count == normal.domains.count, "预览端点不可重复")
     precondition(Set(stress.domains.map(\.id)).count == stress.domains.count, "预览端点不可重复")
+    precondition(Set(overflow.domains.map(\.id)).count == overflow.domains.count, "预览端点不可重复")
 
     try renderDashboard("主界面-常态-浅色", fixture: normal, scheme: .light, output: output)
     try renderDashboard("主界面-复杂-深色", fixture: stress, scheme: .dark, output: output)
@@ -65,8 +67,14 @@ struct CertGlanceVisualQA {
       "自动中号-复杂-深色", entry: stress, family: .systemMedium,
       width: 344, height: 164, scheme: .dark, output: output)
     try renderWidget(
+      "自动中号-溢出-浅色", entry: overflow, family: .systemMedium,
+      width: 344, height: 164, scheme: .light, output: output)
+    try renderWidget(
       "自动大号-复杂-深色", entry: stress, family: .systemLarge,
       width: 344, height: 344, scheme: .dark, output: output)
+    try renderWidget(
+      "自动大号-溢出-浅色", entry: overflow, family: .systemLarge,
+      width: 344, height: 344, scheme: .light, output: output)
     for count in [1, 3, 5] {
       let subset = SSLExpiryEntry(
         date: date, domains: Array(normal.domains.prefix(count)),
@@ -200,11 +208,27 @@ struct CertGlanceVisualQA {
       errorMessage: nil, reminderErrorMessage: nil, selection: .automatic)
   }
 
+  private static func overflowFixture(
+    from normal: SSLExpiryEntry, at date: Date
+  ) -> SSLExpiryEntry {
+    let extras = ["reports.example.com", "cdn.example.net", "mail.example.org"]
+      .map { WatchedDomain(hostname: $0, addedAt: date) }
+    let added = zip(extras, [330.0, 390, 480]).enumerated().map { index, pair in
+      snapshot(
+        for: pair.0, at: date, days: pair.1,
+        checkedAgo: index == 0 ? 2 * 86_400 : 3_600)
+    }
+    return SSLExpiryEntry(
+      date: date, domains: normal.domains + extras, snapshots: normal.snapshots + added,
+      errorMessage: nil, reminderErrorMessage: nil, selection: .automatic)
+  }
+
   private static func snapshot(
     for domain: WatchedDomain, at date: Date, days: Double,
-    state: CertificateCheckState = .trusted, detail: String? = nil, failures: Int = 0
+    state: CertificateCheckState = .trusted, detail: String? = nil, failures: Int = 0,
+    checkedAgo: TimeInterval = 3_600
   ) -> CertificateSnapshot {
-    let checkedAt = date.addingTimeInterval(-3_600)
+    let checkedAt = date.addingTimeInterval(-checkedAgo)
     return CertificateSnapshot(
       hostname: domain.hostname, checkedAt: checkedAt,
       expiresAt: date.addingTimeInterval(days * 86_400), checkState: state,

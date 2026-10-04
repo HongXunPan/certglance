@@ -21,6 +21,11 @@ struct SSLExpiryWidgetView: View {
     Dictionary(uniqueKeysWithValues: entry.snapshots.map { ($0.id, $0) })
   }
 
+  private var attentionCount: Int {
+    WidgetOverview.attentionCount(
+      domains: entry.domains, snapshots: entry.snapshots, at: entry.date)
+  }
+
   var body: some View {
     Group {
       if let error = entry.errorMessage, entry.domains.isEmpty {
@@ -36,7 +41,7 @@ struct SSLExpiryWidgetView: View {
         case .systemLarge:
           WidgetLargeOverviewView(entry: entry, ordered: ordered)
         case .systemMedium:
-          mediumContent(displayItems[0])
+          mediumContent
         default:
           smallContent(focus)
         }
@@ -61,7 +66,7 @@ struct SSLExpiryWidgetView: View {
         }
         Text(domain.displayName)
           .font(.subheadline.weight(.semibold))
-          .lineLimit(1)
+          .lineLimit(2)
           .truncationMode(.middle)
       }
       Spacer(minLength: 5)
@@ -92,59 +97,25 @@ struct SSLExpiryWidgetView: View {
     .accessibilityLabel(accessibilityDescription(domain, snapshot: snapshot, severity: severity))
   }
 
-  private func mediumContent(_ item: CertificateDisplayItem) -> some View {
-    return VStack(alignment: .leading, spacing: 5) {
+  private var mediumContent: some View {
+    let visibleItems = Array(displayItems.prefix(WidgetOverview.mediumVisibleLimit))
+    let hiddenCount = WidgetOverview.hiddenCount(
+      total: ordered.count, items: displayItems,
+      visibleLimit: WidgetOverview.mediumVisibleLimit)
+    return VStack(alignment: .leading, spacing: 3) {
       header
-      if item.isGroup {
-        WidgetExpiryGroupFocus(
-          item: item, snapshots: snapshotByID, date: entry.date, compact: true)
-      } else {
-        let snapshot = snapshotByID[item.primary.id]
-        let severity = snapshot?.severity(at: entry.date) ?? .unchecked
-        HStack(alignment: .center, spacing: 9) {
-          CertificateValidityGauge(snapshot: snapshot, date: entry.date, size: 50)
-          VStack(alignment: .leading, spacing: 3) {
-            Text(item.primary.displayName)
-              .font(.subheadline.weight(.semibold))
-              .lineLimit(1)
-              .truncationMode(.middle)
-            HStack(spacing: 6) {
-              statusLine(severity: severity, snapshot: snapshot)
-              Spacer(minLength: 2)
-              if let snapshot, ordered.count == 1 {
-                Text(checkLabel(snapshot))
-                  .font(.caption2)
-                  .foregroundStyle(.secondary)
-                  .lineLimit(1)
-              } else if let snapshot, entry.date.timeIntervalSince(snapshot.checkedAt) >= 86_400 {
-                Text("待更新")
-                  .font(.caption2)
-                  .foregroundStyle(.secondary)
-              }
-            }
-            expiryLine(snapshot)
-          }
-          .frame(maxWidth: .infinity, alignment: .leading)
+      ForEach(visibleItems.indices, id: \.self) { index in
+        if index > 0 {
+          Divider()
         }
-      }
-      if displayItems.count > 1 {
-        Divider().padding(.vertical, 1)
-        VStack(alignment: .leading, spacing: 4) {
-          ForEach(Array(displayItems.dropFirst().prefix(item.isGroup ? 1 : 2))) { other in
-            WidgetCompactDisplayRow(
-              item: other, snapshots: snapshotByID, date: entry.date)
-          }
-        }
+        WidgetRiskRow(
+          item: visibleItems[index], snapshots: snapshotByID, date: entry.date, badgeSize: 32)
       }
       Spacer(minLength: 0)
-      if item.isGroup {
-        let visible = displayItems.prefix(2).reduce(0) { $0 + $1.domains.count }
-        let hidden = max(0, ordered.count - visible)
-        if hidden > 0 {
-          Text("另有 \(hidden) 个端点")
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-        }
+      if hiddenCount > 0 {
+        Text("另有 \(hiddenCount) 个端点")
+          .font(.caption2)
+          .foregroundStyle(.secondary)
       }
     }
     .accessibilityElement(children: .contain)
@@ -172,38 +143,12 @@ struct SSLExpiryWidgetView: View {
           .font(.caption2.weight(.semibold))
           .accessibilityHint("证书数据已更新，请打开应用查看提醒状态")
       } else {
-        Text(headerCountLabel)
+        Text("\(attentionCount) 需处理 · 共 \(entry.domains.count) 个")
           .font(.caption.weight(.semibold).monospacedDigit())
           .foregroundStyle(.secondary)
-          .accessibilityLabel("监控 \(entry.domains.count) 个域名")
+          .accessibilityLabel("监控 \(entry.domains.count) 个端点，其中 \(attentionCount) 个需处理")
       }
     }
-  }
-
-  private var headerCountLabel: String {
-    "共 \(entry.domains.count) 个"
-  }
-
-  private func statusLine(
-    severity: CertificateSeverity, snapshot: CertificateSnapshot? = nil
-  ) -> some View {
-    let statusText =
-      snapshot?.checkState == .failed
-      ? "\(severity.label) · 连续 \(snapshot?.consecutiveFailureCount ?? 0) 次" : severity.label
-    return HStack(spacing: 5) {
-      Image(systemName: severity.symbol)
-        .foregroundStyle(severity.tint)
-        .accessibilityHidden(true)
-      Text(statusText)
-        .foregroundStyle(.primary)
-    }
-    .font(.caption2.weight(.medium))
-  }
-
-  private func checkLabel(_ snapshot: CertificateSnapshot) -> String {
-    let checked = snapshot.checkedAt.formatted(date: .abbreviated, time: .shortened)
-    return entry.date.timeIntervalSince(snapshot.checkedAt) >= 86_400
-      ? "待更新 · \(checked)" : "检查 \(checked)"
   }
 
   private func smallStatusLabel(

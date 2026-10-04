@@ -13,6 +13,7 @@ TMPDIR="$work/swift-tmp" xcrun swiftc -swift-version 6 -parse-as-library \
   Shared/SeverityStyle.swift Shared/CertificateValidityGauge.swift \
   App/DashboardComponents.swift App/EndpointCards.swift App/ExpiryGroupCard.swift \
   Widget/WidgetDisplayModel.swift Widget/WidgetSupportingViews.swift \
+  Widget/WidgetRiskRow.swift \
   Widget/WidgetLargeOverviewView.swift Widget/SSLExpiryWidgetView.swift \
   Tests/VisualPreview.swift -o "$work/render-visual-previews"
 

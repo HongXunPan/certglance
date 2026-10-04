@@ -16,7 +16,8 @@ enum WidgetDisplaySelection: Equatable, Sendable {
 }
 
 enum WidgetOverview {
-  static let visibleLimit = 5
+  static let mediumVisibleLimit = 3
+  static let largeVisibleLimit = 6
 
   static func severityCounts(
     domains: [WatchedDomain], snapshots: [CertificateSnapshot], at date: Date
@@ -38,7 +39,10 @@ enum WidgetOverview {
     return domains.count - healthy
   }
 
-  static func hiddenCount(total: Int) -> Int {
-    max(0, total - visibleLimit)
+  static func hiddenCount(
+    total: Int, items: [CertificateDisplayItem], visibleLimit: Int
+  ) -> Int {
+    let visible = items.prefix(visibleLimit).reduce(0) { $0 + $1.domains.count }
+    return max(0, total - visible)
   }
 }

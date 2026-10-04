@@ -36,8 +36,29 @@ struct WidgetDisplayChecks {
     expect(
       counts[.soon] == 1 && counts[.healthy] == 1 && counts[.unchecked] == 5,
       "大号分类数量应与端点状态一致")
-    expect(WidgetOverview.hiddenCount(total: 7) == 2, "大号应报告未展示的端点数量")
-    expect(WidgetOverview.hiddenCount(total: 2) == 0, "端点不足上限时不应出现负数")
+    let items = CertificateDisplayGrouping.items(domains, snapshots: snapshots, at: now)
+    expect(
+      WidgetOverview.hiddenCount(
+        total: domains.count, items: items, visibleLimit: WidgetOverview.mediumVisibleLimit) == 4,
+      "中号应显示三个风险项，并报告剩余端点")
+    expect(
+      WidgetOverview.hiddenCount(
+        total: domains.count, items: items, visibleLimit: WidgetOverview.largeVisibleLimit) == 1,
+      "大号应显示六个风险项，并报告剩余端点")
+    expect(
+      WidgetOverview.hiddenCount(total: 2, items: Array(items.prefix(2)), visibleLimit: 6) == 0,
+      "端点不足上限时不应出现负数")
+    let third = CertificateSnapshot(
+      hostname: domains[2].hostname, checkedAt: now,
+      expiresAt: second.expiresAt, checkState: .trusted, detail: nil)
+    let groupedItems = CertificateDisplayGrouping.items(
+      domains, snapshots: snapshots + [third], at: now)
+    expect(groupedItems.first?.domains.count == 2, "同日组应占一个展示项")
+    expect(
+      WidgetOverview.hiddenCount(
+        total: domains.count, items: groupedItems,
+        visibleLimit: WidgetOverview.mediumVisibleLimit) == 3,
+      "隐藏数量应扣除同日组内已展示的全部端点")
 
     print("Widget 展示规则通过")
   }

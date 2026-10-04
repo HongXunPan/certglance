@@ -35,7 +35,8 @@ xcrun swiftc -swift-version 6 -parse-as-library "${swift_cache[@]}" \
 
 printf '[开始] Widget 展示规则\n'
 xcrun swiftc -swift-version 6 -parse-as-library "${swift_cache[@]}" \
-  Shared/DomainModels.swift Widget/WidgetDisplayModel.swift Tests/WidgetDisplayChecks.swift \
+  Shared/DomainModels.swift Shared/CertificateDisplayGrouping.swift \
+  Widget/WidgetDisplayModel.swift Tests/WidgetDisplayChecks.swift \
   -o "${temp}/WidgetDisplayChecks"
 "${temp}/WidgetDisplayChecks"
 
