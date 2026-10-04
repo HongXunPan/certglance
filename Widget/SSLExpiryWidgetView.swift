@@ -56,13 +56,23 @@ struct SSLExpiryWidgetView: View {
         }
         Text(domain.displayName)
           .font(.subheadline.weight(.semibold))
-          .lineLimit(2)
+          .lineLimit(1)
           .truncationMode(.middle)
       }
       Spacer(minLength: 5)
-      HStack(alignment: .center, spacing: 9) {
-        CertificateValidityGauge(snapshot: snapshot, date: entry.date, size: 76)
-        statusLine(severity: severity)
+      HStack(alignment: .center, spacing: 7) {
+        CertificateValidityGauge(snapshot: snapshot, date: entry.date, size: 68)
+        VStack(alignment: .leading, spacing: 3) {
+          Image(systemName: severity.symbol)
+            .font(.caption)
+            .foregroundStyle(severity.tint)
+            .accessibilityHidden(true)
+          Text(smallStatusLabel(snapshot: snapshot, severity: severity))
+            .font(.caption2.weight(.semibold))
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
       }
       expiryLine(snapshot)
         .padding(.top, 4)
@@ -92,11 +102,15 @@ struct SSLExpiryWidgetView: View {
           HStack(spacing: 6) {
             statusLine(severity: severity, snapshot: snapshot)
             Spacer(minLength: 2)
-            if let snapshot {
+            if let snapshot, ordered.count == 1 {
               Text(checkLabel(snapshot))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
+            } else if let snapshot, entry.date.timeIntervalSince(snapshot.checkedAt) >= 86_400 {
+              Text("待更新")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
             }
           }
           expiryLine(snapshot)
@@ -171,6 +185,17 @@ struct SSLExpiryWidgetView: View {
     let checked = snapshot.checkedAt.formatted(date: .abbreviated, time: .shortened)
     return entry.date.timeIntervalSince(snapshot.checkedAt) >= 86_400
       ? "待更新 · \(checked)" : "检查 \(checked)"
+  }
+
+  private func smallStatusLabel(
+    snapshot: CertificateSnapshot?, severity: CertificateSeverity
+  ) -> String {
+    if let snapshot, snapshot.checkState == .failed,
+      snapshot.consecutiveFailureCount > 0
+    {
+      return "失败 \(snapshot.consecutiveFailureCount) 次"
+    }
+    return severity.label
   }
 
   @ViewBuilder

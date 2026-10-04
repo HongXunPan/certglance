@@ -99,6 +99,7 @@ struct CertificateFocusCard: View {
       Image(systemName: "ellipsis.circle")
     }
     .menuStyle(.borderlessButton)
+    .menuIndicator(.hidden)
     .frame(width: 28, height: 28)
     .accessibilityLabel("管理 \(domain.displayName)")
   }
@@ -172,6 +173,7 @@ struct CertificateEndpointRow: View {
         Image(systemName: "ellipsis.circle")
       }
       .menuStyle(.borderlessButton)
+      .menuIndicator(.hidden)
       .frame(width: 28, height: 28)
       .accessibilityLabel("管理 \(domain.displayName)")
     }

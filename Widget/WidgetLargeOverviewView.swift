@@ -13,16 +13,18 @@ struct WidgetLargeOverviewView: View {
       header
       if let focus = ordered.first {
         focusRow(focus)
-        Divider()
-        VStack(alignment: .leading, spacing: 7) {
-          Text("其他端点")
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(.secondary)
-          ForEach(Array(ordered.dropFirst().prefix(WidgetOverview.visibleLimit - 1))) { domain in
-            WidgetLargeEndpointRow(
-              domain: domain, snapshot: snapshotByID[domain.id], date: entry.date
-            )
-            .padding(.vertical, 3)
+        if ordered.count > 1 {
+          Divider()
+          VStack(alignment: .leading, spacing: 7) {
+            Text("其他端点")
+              .font(.caption.weight(.semibold))
+              .foregroundStyle(.secondary)
+            ForEach(Array(ordered.dropFirst().prefix(WidgetOverview.visibleLimit - 1))) { domain in
+              WidgetLargeEndpointRow(
+                domain: domain, snapshot: snapshotByID[domain.id], date: entry.date
+              )
+              .padding(.vertical, 3)
+            }
           }
         }
       }
@@ -135,7 +137,9 @@ struct WidgetLargeOverviewView: View {
   private var footer: some View {
     HStack(spacing: 5) {
       let hidden = WidgetOverview.hiddenCount(total: ordered.count)
-      Text(hidden > 0 ? "另有 \(hidden) 个端点" : "按风险排序")
+      if hidden > 0 {
+        Text("另有 \(hidden) 个端点")
+      }
       Spacer(minLength: 4)
       if entry.errorMessage != nil || entry.reminderErrorMessage != nil {
         WidgetFreshnessFooter(entry: entry, snapshot: nil)
