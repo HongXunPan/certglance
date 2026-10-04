@@ -1,0 +1,25 @@
+name: 功能建议
+description: 说明使用场景和希望改善的体验
+title: "[建议] "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 当前遇到的问题
+      description: 先描述使用场景，不只描述想增加的按钮或设置项。
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 建议的行为
+      description: 如涉及 WidgetKit 调度、安装升级或通知，请说明可以接受的限制。
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 已考虑的替代方案
+      description: 可选；有助于比较复杂度与维护成本。
+    validations:
+      required: false

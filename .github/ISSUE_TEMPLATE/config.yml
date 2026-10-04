@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 私密报告安全漏洞
+    url: https://github.com/HongXunPan/certglance/security
+    about: 不要在公开 Issue 中披露漏洞或上传敏感资料，请在 Security 页面选择私密报告入口。
+  - name: 安装与已知限制
+    url: https://github.com/HongXunPan/certglance/blob/main/docs/正式候选验收.md
+    about: 提交问题前，请先核对非公证安装、WidgetKit 调度和覆盖升级限制。

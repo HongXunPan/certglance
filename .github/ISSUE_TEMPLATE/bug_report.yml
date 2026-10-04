@@ -1,0 +1,61 @@
+name: 缺陷报告
+description: 报告可复现的 CertGlance 问题
+title: "[缺陷] "
+body:
+  - type: markdown
+    attributes:
+      value: 安全漏洞请使用仓库 Security 页面的私密报告入口；截图和日志请先遮盖真实域名、账户路径及证书资料。
+  - type: input
+    id: build
+    attributes:
+      label: App 构建号
+      description: 从已安装 App 或候选包记录构建号；如果只运行源码，请填写提交号。
+      placeholder: "例如：构建 9"
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: macOS 版本与芯片架构
+      placeholder: "例如：macOS 26，Apple 芯片"
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: 出现问题的位置
+      options:
+        - 宿主 App
+        - 桌面小组件
+        - 小组件图库预览
+        - 安装或打包
+        - 其他
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 请从可控状态开始描述；小组件问题请区分图库、桌面实例和真实时间线。
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期结果
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际结果
+      description: 可附去隐私化的截图或简短日志；不要附私钥、P12、完整配置和真实域名。
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我已去除真实域名、账户路径、证书及其他私人资料；此问题不包含未公开的安全漏洞。
+          required: true

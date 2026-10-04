@@ -8,13 +8,7 @@
 - 仅检出开源子仓时，可在子仓根目录执行：
 
 ```sh
-plutil -lint PoC/WidgetSharing/WidgetSharingPoC.xcodeproj/project.pbxproj \
-  PoC/WidgetSharing/App/Info.plist PoC/WidgetSharing/Widget/Info.plist \
-  PoC/WidgetSharing/Helper/Info.plist \
-  PoC/WidgetSharing/App/App.entitlements PoC/WidgetSharing/Widget/Widget.entitlements
-xcrun swift format lint --recursive --strict \
-  PoC/WidgetSharing/App PoC/WidgetSharing/Widget PoC/WidgetSharing/Shared \
-  PoC/WidgetSharing/Helper
+bash scripts/check-widget-sharing-poc.sh
 xcodebuild -project PoC/WidgetSharing/WidgetSharingPoC.xcodeproj \
   -scheme WidgetSharingPoC -configuration Debug -destination 'generic/platform=macOS' \
   -derivedDataPath .build/WidgetSharingPoC CODE_SIGNING_ALLOWED=NO build
@@ -107,4 +101,4 @@ Widget 仅在 `getTimeline` 写回执时，直接读取固定安装位置 `/Appl
 
 ## 边界与清理
 
-专用目录为当前账户下 `Library/Application Support/com.HongXunPan.SSLWidget.WidgetSharingPoC/`。宿主读写此根目录，并创建 `config/request.txt` 与 `state/`；Widget 只读 `config/`，只在生成时间线时读写 `state/receipt.json`。目录权限为 `0700`，文件为 `0600`，但不能隔离同一用户下的其他进程。旧版 `probe.txt` 不参与本轮验证。所用沙盒临时文件例外尚不能视为稳定的正式共享能力；此 PoC 不验证并发写入、通知、证书检查或正式应用更新链路。验收结束后退出 PoC App，可手动删除该**仅含假数据**的专用目录。正式项目仍使用开发态 App Group 仓储，是否迁移需要另行确认。
+专用目录为当前账户下 `Library/Application Support/com.HongXunPan.SSLWidget.WidgetSharingPoC/`。宿主读写此根目录，并创建 `config/request.txt` 与 `state/`；Widget 只读 `config/`，只在生成时间线时读写 `state/receipt.json`。目录权限为 `0700`，文件为 `0600`，但不能隔离同一用户下的其他进程。旧版 `probe.txt` 不参与本轮验证。所用沙盒临时文件例外尚不能视为稳定的正式共享能力；此 PoC 不验证并发写入、通知、证书检查或正式应用更新链路。验收结束后退出 PoC App，可手动删除该**仅含假数据**的专用目录。正式项目目前也采用独立的自签名文件桥接，但使用不同的 Bundle ID 和数据目录；本 PoC 的验收不能代替正式项目运行态验收。
