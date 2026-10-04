@@ -8,22 +8,33 @@ struct WidgetLargeOverviewView: View {
     Dictionary(uniqueKeysWithValues: entry.snapshots.map { ($0.id, $0) })
   }
 
+  private var displayItems: [CertificateDisplayItem] {
+    CertificateDisplayGrouping.items(
+      entry.domains, snapshots: entry.snapshots, at: entry.date)
+  }
+
   var body: some View {
-    VStack(alignment: .leading, spacing: 10) {
+    VStack(alignment: .leading, spacing: 8) {
       header
-      if let focus = ordered.first {
-        focusRow(focus)
-        if ordered.count > 1 {
+      if let focus = displayItems.first {
+        if focus.isGroup {
+          WidgetExpiryGroupFocus(
+            item: focus, snapshots: snapshotByID, date: entry.date, compact: false)
+        } else {
+          focusRow(focus.primary)
+        }
+        if displayItems.count > 1 {
           Divider()
-          VStack(alignment: .leading, spacing: 7) {
+          VStack(alignment: .leading, spacing: 5) {
             Text("其他端点")
               .font(.caption.weight(.semibold))
               .foregroundStyle(.secondary)
-            ForEach(Array(ordered.dropFirst().prefix(WidgetOverview.visibleLimit - 1))) { domain in
-              WidgetLargeEndpointRow(
-                domain: domain, snapshot: snapshotByID[domain.id], date: entry.date
+            ForEach(Array(displayItems.dropFirst().prefix(WidgetOverview.visibleLimit - 1))) {
+              item in
+              WidgetCompactDisplayRow(
+                item: item, snapshots: snapshotByID, date: entry.date
               )
-              .padding(.vertical, 3)
+              .padding(.vertical, 2)
             }
           }
         }
@@ -136,7 +147,10 @@ struct WidgetLargeOverviewView: View {
 
   private var footer: some View {
     HStack(spacing: 5) {
-      let hidden = WidgetOverview.hiddenCount(total: ordered.count)
+      let visible = displayItems.prefix(WidgetOverview.visibleLimit).reduce(0) {
+        $0 + $1.domains.count
+      }
+      let hidden = max(0, ordered.count - visible)
       if hidden > 0 {
         Text("另有 \(hidden) 个端点")
       }
@@ -151,57 +165,5 @@ struct WidgetLargeOverviewView: View {
     .foregroundStyle(.secondary)
     .lineLimit(1)
     .minimumScaleFactor(0.8)
-  }
-}
-
-private struct WidgetLargeEndpointRow: View {
-  let domain: WatchedDomain
-  let snapshot: CertificateSnapshot?
-  let date: Date
-
-  var body: some View {
-    let severity = snapshot?.severity(at: date) ?? .unchecked
-    HStack(alignment: .center, spacing: 7) {
-      Image(systemName: severity.symbol)
-        .font(.caption)
-        .foregroundStyle(severity.tint)
-        .frame(width: 16)
-        .accessibilityHidden(true)
-      VStack(alignment: .leading, spacing: 1) {
-        Text(domain.displayName)
-          .font(.caption.weight(.semibold))
-          .lineLimit(1)
-          .truncationMode(.middle)
-        if let snapshot, let expiry = snapshot.expiresAt {
-          Text(
-            "\(snapshot.checkState == .failed ? "已知到期" : "到期") \(expiry.formatted(.dateTime.year().month(.abbreviated).day()))"
-          )
-          .font(.caption2)
-          .foregroundStyle(.secondary)
-        } else {
-          Text("等待首次检查")
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-        }
-      }
-      Spacer(minLength: 4)
-      Text(statusText(severity: severity))
-        .font(.caption.weight(.medium).monospacedDigit())
-        .lineLimit(1)
-        .minimumScaleFactor(0.8)
-    }
-    .accessibilityElement(children: .combine)
-  }
-
-  private func statusText(severity: CertificateSeverity) -> String {
-    if let snapshot, snapshot.checkState == .trusted,
-      let days = snapshot.daysRemaining(at: date)
-    {
-      return days <= 0 ? "已过期" : "\(days) 天"
-    }
-    if let snapshot, snapshot.checkState == .failed {
-      return "失败 \(snapshot.consecutiveFailureCount) 次"
-    }
-    return severity.label
   }
 }

@@ -70,6 +70,108 @@ struct WidgetCompactEndpointRow: View {
   }
 }
 
+struct WidgetCompactDisplayRow: View {
+  let item: CertificateDisplayItem
+  let snapshots: [String: CertificateSnapshot]
+  let date: Date
+
+  var body: some View {
+    if item.isGroup {
+      VStack(alignment: .leading, spacing: 2) {
+        HStack(spacing: 5) {
+          Image(systemName: item.severity.symbol)
+            .foregroundStyle(item.severity.tint)
+            .accessibilityHidden(true)
+          if let day = item.expiryDay {
+            Text(
+              "\(day.formatted(.dateTime.month(.abbreviated).day())) 到期 · \(item.domains.count) 个"
+            )
+            .font(.caption.weight(.semibold))
+            .lineLimit(1)
+          }
+          Spacer(minLength: 4)
+          Text(minimumDays > 0 ? "\(minimumDays) 天" : "已过期")
+            .font(.caption.weight(.semibold).monospacedDigit())
+        }
+        Text(item.domains.prefix(2).map(\.displayName).joined(separator: " · "))
+          .font(.caption2)
+          .foregroundStyle(.secondary)
+          .lineLimit(1)
+          .truncationMode(.middle)
+      }
+      .accessibilityElement(children: .ignore)
+      .accessibilityLabel(
+        "\(item.domains.count) 个端点同日到期，\(remainingDescription)：\(item.domains.map(\.displayName).joined(separator: "、"))"
+      )
+    } else {
+      WidgetCompactEndpointRow(
+        domain: item.primary, snapshot: snapshots[item.primary.id], date: date)
+    }
+  }
+
+  private var minimumDays: Int {
+    max(0, item.minimumDays(at: date, snapshots: snapshots) ?? 0)
+  }
+
+  private var remainingDescription: String {
+    minimumDays > 0 ? "最短剩余 \(minimumDays) 天" : "已过期"
+  }
+}
+
+struct WidgetExpiryGroupFocus: View {
+  let item: CertificateDisplayItem
+  let snapshots: [String: CertificateSnapshot]
+  let date: Date
+  let compact: Bool
+
+  var body: some View {
+    HStack(alignment: .center, spacing: compact ? 9 : 14) {
+      VStack(spacing: 0) {
+        Text(minimumDays > 0 ? "\(minimumDays)" : "0")
+          .font(.system(compact ? .title2 : .largeTitle, design: .rounded, weight: .bold))
+          .monospacedDigit()
+        Text(minimumDays > 0 ? "天" : "已过期")
+          .font(.caption)
+      }
+      .foregroundStyle(item.severity.tint)
+      .frame(width: compact ? 50 : 78)
+      VStack(alignment: .leading, spacing: compact ? 2 : 4) {
+        if let day = item.expiryDay {
+          Text(
+            "\(day.formatted(.dateTime.month(.abbreviated).day())) 到期 · \(item.domains.count) 个端点"
+          )
+          .font(compact ? .caption.weight(.semibold) : .subheadline.weight(.semibold))
+          .lineLimit(1)
+        }
+        ForEach(Array(item.domains.prefix(2))) { domain in
+          Text(domain.displayName)
+            .font(compact ? .caption : .subheadline)
+            .lineLimit(1)
+            .truncationMode(.middle)
+        }
+        if item.domains.count > 2 {
+          Text("另有 \(item.domains.count - 2) 个")
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+        }
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+    }
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(
+      "\(item.domains.count) 个端点同日到期，\(remainingDescription)：\(item.domains.map(\.displayName).joined(separator: "、"))"
+    )
+  }
+
+  private var minimumDays: Int {
+    max(0, item.minimumDays(at: date, snapshots: snapshots) ?? 0)
+  }
+
+  private var remainingDescription: String {
+    minimumDays > 0 ? "最短剩余 \(minimumDays) 天" : "已过期"
+  }
+}
+
 struct WidgetEmptyState: View {
   let title: String
   let detail: String

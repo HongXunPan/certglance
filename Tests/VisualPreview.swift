@@ -87,7 +87,7 @@ struct CertGlanceVisualQA {
   private static func renderDashboard(
     _ name: String, fixture: SSLExpiryEntry, scheme: ColorScheme, output: URL
   ) throws {
-    let ordered = DashboardOrder.sorted(
+    let items = CertificateDisplayGrouping.items(
       fixture.domains, snapshots: fixture.snapshots, at: fixture.date)
     let indexed = Dictionary(uniqueKeysWithValues: fixture.snapshots.map { ($0.id, $0) })
     let view = VStack(alignment: .leading, spacing: 12) {
@@ -101,20 +101,32 @@ struct CertGlanceVisualQA {
         domains: fixture.domains, snapshots: fixture.snapshots, date: fixture.date)
       Text("监控端点")
         .font(.headline)
-      if let focus = ordered.first {
+      if let focus = items.first {
         Text("优先关注")
           .font(.subheadline.weight(.semibold))
           .foregroundStyle(.secondary)
-        CertificateFocusCard(
-          domain: focus, snapshot: indexed[focus.id], date: fixture.date, onRemove: {})
+        if focus.isGroup {
+          ExpiryGroupCard(
+            item: focus, snapshots: indexed, date: fixture.date, onRemove: { _ in })
+        } else {
+          CertificateFocusCard(
+            domain: focus.primary, snapshot: indexed[focus.primary.id],
+            date: fixture.date, onRemove: {})
+        }
       }
-      if ordered.count > 1 {
+      if items.count > 1 {
         Text("其他端点")
           .font(.subheadline.weight(.semibold))
           .foregroundStyle(.secondary)
-        ForEach(Array(ordered.dropFirst())) { domain in
-          CertificateEndpointRow(
-            domain: domain, snapshot: indexed[domain.id], date: fixture.date, onRemove: {})
+        ForEach(Array(items.dropFirst())) { item in
+          if item.isGroup {
+            ExpiryGroupCard(
+              item: item, snapshots: indexed, date: fixture.date, onRemove: { _ in })
+          } else {
+            CertificateEndpointRow(
+              domain: item.primary, snapshot: indexed[item.primary.id],
+              date: fixture.date, onRemove: {})
+          }
           Divider()
         }
       }
@@ -157,7 +169,7 @@ struct CertGlanceVisualQA {
       "api.billing.staging.very-long-subdomain.example.com", "portal.example.net",
       "health.example.org",
     ]
-    let days = [15.0, 16, 49, 120, 220, 300]
+    let days = [15.0, 15, 49, 120, 220, 300]
     let domains = names.map { WatchedDomain(hostname: $0, addedAt: date) }
     let snapshots = zip(domains, days).map { domain, remaining in
       snapshot(for: domain, at: date, days: remaining)

@@ -10,5 +10,8 @@ struct SSLWidgetApp: App {
         .frame(minWidth: 560, minHeight: 460)
     }
     .defaultSize(width: 760, height: 640)
+    Settings {
+      ReminderSettingsView(model: model)
+    }
   }
 }

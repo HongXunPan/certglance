@@ -39,19 +39,33 @@ struct DomainManagementView: View {
             notificationCallout
           }
           filterControls
-          let ordered = visibleDomains(at: context.date)
-          if let focus = ordered.first {
-            Section(focusHeading(for: focus, at: context.date)) {
-              CertificateFocusCard(
-                domain: focus, snapshot: model.snapshot(for: focus.id), date: context.date,
-                onRemove: { domainToRemove = focus.id })
+          let items = CertificateDisplayGrouping.items(
+            visibleDomains(at: context.date), snapshots: model.snapshots, at: context.date)
+          let indexed = Dictionary(uniqueKeysWithValues: model.snapshots.map { ($0.id, $0) })
+          if let focus = items.first {
+            Section(focusHeading(for: focus.primary, at: context.date)) {
+              if focus.isGroup {
+                ExpiryGroupCard(
+                  item: focus, snapshots: indexed, date: context.date,
+                  onRemove: { domainToRemove = $0 })
+              } else {
+                CertificateFocusCard(
+                  domain: focus.primary, snapshot: model.snapshot(for: focus.primary.id),
+                  date: context.date, onRemove: { domainToRemove = focus.primary.id })
+              }
             }
-            if ordered.count > 1 {
+            if items.count > 1 {
               Section("其他端点") {
-                ForEach(Array(ordered.dropFirst())) { domain in
-                  CertificateEndpointRow(
-                    domain: domain, snapshot: model.snapshot(for: domain.id),
-                    date: context.date, onRemove: { domainToRemove = domain.id })
+                ForEach(Array(items.dropFirst())) { item in
+                  if item.isGroup {
+                    ExpiryGroupCard(
+                      item: item, snapshots: indexed, date: context.date,
+                      onRemove: { domainToRemove = $0 })
+                  } else {
+                    CertificateEndpointRow(
+                      domain: item.primary, snapshot: model.snapshot(for: item.primary.id),
+                      date: context.date, onRemove: { domainToRemove = item.primary.id })
+                  }
                 }
               }
             }

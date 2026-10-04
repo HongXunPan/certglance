@@ -81,6 +81,45 @@ struct ModelChecks {
         == "expired.example",
       "看板应聚焦最紧急的域名")
 
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+    let expiryDay = calendar.startOfDay(for: now.addingTimeInterval(15 * 86_400))
+    let groupedDomains = ["one.example", "two.example", "three.example", "bad.example"].map {
+      WatchedDomain(hostname: $0, addedAt: now)
+    }
+    let groupedSnapshots = [
+      CertificateSnapshot(
+        hostname: "one.example", checkedAt: now,
+        expiresAt: expiryDay.addingTimeInterval(10 * 3_600),
+        checkState: .trusted, detail: nil),
+      CertificateSnapshot(
+        hostname: "two.example", checkedAt: now,
+        expiresAt: expiryDay.addingTimeInterval(18 * 3_600),
+        checkState: .trusted, detail: nil),
+      CertificateSnapshot(
+        hostname: "three.example", checkedAt: now,
+        expiresAt: expiryDay.addingTimeInterval(86_400 + 10 * 3_600),
+        checkState: .trusted, detail: nil),
+      CertificateSnapshot(
+        hostname: "bad.example", checkedAt: now,
+        expiresAt: expiryDay.addingTimeInterval(12 * 3_600),
+        checkState: .untrusted, detail: nil),
+    ]
+    let displayItems = CertificateDisplayGrouping.items(
+      groupedDomains, snapshots: groupedSnapshots, at: now, calendar: calendar)
+    expect(displayItems.count == 3, "同日可信端点应合并，异日与异常端点应独立")
+    expect(
+      displayItems[1].domains.map(\.hostname) == ["one.example", "two.example"],
+      "同日组应保留逐端点顺序")
+    expect(
+      displayItems[1].isGroup && !displayItems[0].isGroup,
+      "异常端点不得藏入日期组")
+    let groupedByID = Dictionary(uniqueKeysWithValues: groupedSnapshots.map { ($0.id, $0) })
+    expect(
+      displayItems[1].minimumDays(at: now, snapshots: groupedByID)
+        == groupedSnapshots[0].daysRemaining(at: now),
+      "日期组应使用最早截止端点的剩余天数")
+
     let future = NotificationPolicy.moments(
       expiresAt: now.addingTimeInterval(60 * 86_400), now: now)
     expect(future.map(\.threshold) == [30, 7, 1], "远期证书应计划三个提醒档位")
@@ -118,6 +157,38 @@ struct ModelChecks {
       NotificationPolicy.schedulingAction(
         for: withinSeven[0], alreadyPending: false, tokenRecorded: true) == .skip,
       "未来提醒投递后再次同步不得对同一档位即时重复提醒")
+    let custom = try ReminderPreferences.standard.adding(14, at: now)
+    expect(custom.days == [30, 14, 7, 1], "自定义提醒应按剩余天数排序")
+    expect((try? custom.adding(14, at: now)) == nil, "重复提醒天数应拒绝")
+    expect((try? custom.adding(0, at: now)) == nil, "非正整数提醒天数应拒绝")
+    let customMoments = NotificationPolicy.moments(
+      expiresAt: now.addingTimeInterval(60 * 86_400), now: now, preferences: custom)
+    expect(customMoments.map(\.threshold) == [30, 14, 7, 1], "自定义档位应进入未来提醒计划")
+    let missed = try ReminderPreferences.standard.adding(20, at: now)
+    let missedMoments = NotificationPolicy.moments(
+      expiresAt: now.addingTimeInterval(15 * 86_400), now: now, preferences: missed)
+    expect(!missedMoments.map(\.threshold).contains(20), "刚启用的已错过档位不得补发")
+    let noPreExpiry = ReminderPreferences(thresholds: [])
+    expect(
+      NotificationPolicy.moments(
+        expiresAt: now.addingTimeInterval(15 * 86_400), now: now,
+        preferences: noPreExpiry
+      ).isEmpty,
+      "清空档位应停止到期前提醒")
+    expect(
+      NotificationPolicy.moments(
+        expiresAt: now.addingTimeInterval(-86_400), now: now,
+        preferences: noPreExpiry
+      ).map(\.threshold) == [0],
+      "过期提醒独立于自定义到期前档位")
+    let removed = custom.removing(30)
+    let validRequests = NotificationPolicy.validRequestIdentifiers(
+      snapshots: snapshots, preferences: removed, prefix: "ssl-widget.")
+    let healthyBase =
+      "ssl-widget.healthy.example.\(Int(snapshots[0].expiresAt!.timeIntervalSince1970))."
+    expect(validRequests.contains("\(healthyBase)14"), "新增档位应保留待发请求标识")
+    expect(!validRequests.contains("\(healthyBase)30"), "已移除档位不得保留旧请求")
+    expect(validRequests.contains("\(healthyBase)0"), "过期提醒仍保留独立标识")
     print("模型定点检查通过")
   }
 

@@ -6,6 +6,8 @@ protocol SnapshotStore: Sendable {
   func snapshots() throws -> [CertificateSnapshot]
   func replaceDomains(_ domains: [WatchedDomain]) throws
   func mergeSnapshots(_ checked: [CertificateSnapshot]) throws -> [CertificateSnapshot]
+  func reminderPreferences() throws -> ReminderPreferences
+  func replaceReminderPreferences(_ preferences: ReminderPreferences) throws
   func notificationTokens() throws -> Set<String>
   func addNotificationTokens(_ tokens: Set<String>) throws
 }
@@ -149,6 +151,29 @@ final class FileSnapshotStore: SnapshotStore, @unchecked Sendable {
         .sorted { $0.id < $1.id }
       try write(merged, to: state.appendingPathComponent("snapshots.v1.json"))
       return merged
+    }
+  }
+
+  func reminderPreferences() throws -> ReminderPreferences {
+    let url = config.appendingPathComponent("reminder-thresholds.v1.json")
+    var info = stat()
+    if lstat(url.path, &info) != 0 {
+      if errno == ENOENT { return .standard }
+      throw SharedStoreError.unavailable
+    }
+    let saved: [ReminderThreshold] = try read([ReminderThreshold].self, from: url)
+    let preferences = ReminderPreferences(thresholds: saved)
+    guard preferences.isValid else { throw SharedStoreError.corrupted }
+    return preferences
+  }
+
+  func replaceReminderPreferences(_ preferences: ReminderPreferences) throws {
+    guard preferences.isValid else { throw SharedStoreError.corrupted }
+    try withLock {
+      _ = try reminderPreferences()
+      try write(
+        preferences.thresholds,
+        to: config.appendingPathComponent("reminder-thresholds.v1.json"))
     }
   }
 

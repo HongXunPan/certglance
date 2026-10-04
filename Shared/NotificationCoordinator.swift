@@ -14,13 +14,15 @@ struct NotificationCoordinator: Sendable {
 
   func synchronize(store: any SnapshotStore) async throws {
     let center = UNUserNotificationCenter.current()
+    let snapshots = try store.snapshots()
+    let preferences = try store.reminderPreferences()
+    let pendingIdentifiers = await removeObsoleteRequests(
+      center: center, snapshots: snapshots, preferences: preferences)
     let status = await center.notificationSettings().authorizationStatus
     guard status == .authorized || status == .provisional else { return }
 
-    let snapshots = try store.snapshots()
     let now = Date()
     let active = snapshots.filter { $0.checkState != .failed && $0.expiresAt != nil }
-    let pendingIdentifiers = await removeObsoleteRequests(center: center, snapshots: snapshots)
 
     let tokens = try store.notificationTokens()
     var scheduleError: Error?
@@ -28,7 +30,9 @@ struct NotificationCoordinator: Sendable {
       for snapshot in active {
         guard let expiry = snapshot.expiresAt else { continue }
         let identifierBase = "\(prefix)\(snapshot.id).\(Int(expiry.timeIntervalSince1970))."
-        for moment in NotificationPolicy.moments(expiresAt: expiry, now: now) {
+        for moment in NotificationPolicy.moments(
+          expiresAt: expiry, now: now, preferences: preferences)
+        {
           let identifier = "\(identifierBase)\(moment.threshold)"
           let action = NotificationPolicy.schedulingAction(
             for: moment,
@@ -62,20 +66,21 @@ struct NotificationCoordinator: Sendable {
     } catch {
       scheduleError = error
     }
-    _ = await removeObsoleteRequests(center: center, snapshots: try store.snapshots())
+    _ = await removeObsoleteRequests(
+      center: center, snapshots: try store.snapshots(),
+      preferences: try store.reminderPreferences())
     if let scheduleError { throw scheduleError }
   }
 
   private func removeObsoleteRequests(
-    center: UNUserNotificationCenter, snapshots: [CertificateSnapshot]
+    center: UNUserNotificationCenter, snapshots: [CertificateSnapshot],
+    preferences: ReminderPreferences
   ) async -> Set<String> {
-    let validPrefixes = snapshots.compactMap { snapshot -> String? in
-      guard let expiry = snapshot.expiresAt else { return nil }
-      return "\(prefix)\(snapshot.id).\(Int(expiry.timeIntervalSince1970))."
-    }
+    let validIdentifiers = NotificationPolicy.validRequestIdentifiers(
+      snapshots: snapshots, preferences: preferences, prefix: prefix)
     let pending = await center.pendingNotificationRequests()
     let obsolete = pending.map(\.identifier).filter { identifier in
-      identifier.hasPrefix(prefix) && !validPrefixes.contains(where: identifier.hasPrefix)
+      identifier.hasPrefix(prefix) && !validIdentifiers.contains(identifier)
     }
     center.removePendingNotificationRequests(withIdentifiers: obsolete)
     return Set(pending.map(\.identifier)).subtracting(obsolete)

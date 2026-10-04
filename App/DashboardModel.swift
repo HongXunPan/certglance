@@ -12,6 +12,8 @@ final class DashboardModel: ObservableObject {
   @Published private(set) var notificationDescription = "正在读取通知状态"
   @Published private(set) var notificationsEnabled = false
   @Published private(set) var notificationDenied = false
+  @Published private(set) var reminderPreferences = ReminderPreferences.standard
+  @Published private(set) var reminderSettingsError: String?
   @Published private(set) var storageError: String?
   @Published private(set) var lastActionMessage: String?
   @Published var alertMessage: String?
@@ -43,8 +45,68 @@ final class DashboardModel: ObservableObject {
       storageError = error.localizedDescription
       return
     }
+    refreshReminderPreferences()
     await updateNotificationDescription()
     await enqueueRefresh(.due)
+  }
+
+  func refreshReminderPreferences() {
+    guard let store else {
+      reminderSettingsError = storageError ?? "共享数据不可用。"
+      return
+    }
+    do {
+      reminderPreferences = try store.reminderPreferences()
+      reminderSettingsError = nil
+    } catch {
+      reminderSettingsError = "提醒设置无法读取；原文件已保留：\(error.localizedDescription)"
+    }
+  }
+
+  func refreshNotificationStatus() async {
+    await updateNotificationDescription()
+  }
+
+  func addReminderDay(_ day: Int) async -> Bool {
+    guard let store else {
+      reminderSettingsError = storageError ?? "共享数据不可用。"
+      return false
+    }
+    do {
+      let updated = try store.reminderPreferences().adding(day, at: .now)
+      try store.replaceReminderPreferences(updated)
+      await applyReminderPreferences(updated, store: store)
+      return true
+    } catch {
+      reminderSettingsError = "提醒设置未保存：\(error.localizedDescription)"
+      return false
+    }
+  }
+
+  func removeReminderDay(_ day: Int) async {
+    guard let store else {
+      reminderSettingsError = storageError ?? "共享数据不可用。"
+      return
+    }
+    do {
+      let updated = try store.reminderPreferences().removing(day)
+      try store.replaceReminderPreferences(updated)
+      await applyReminderPreferences(updated, store: store)
+    } catch {
+      reminderSettingsError = "提醒设置未保存：\(error.localizedDescription)"
+    }
+  }
+
+  private func applyReminderPreferences(
+    _ updated: ReminderPreferences, store: any SnapshotStore
+  ) async {
+    reminderPreferences = updated
+    reminderSettingsError = nil
+    do {
+      try await notifications.synchronize(store: store)
+    } catch {
+      reminderSettingsError = "设置已保存，但提醒重排失败：\(error.localizedDescription)"
+    }
   }
 
   func addDomain() async -> Bool {

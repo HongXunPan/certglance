@@ -18,6 +18,12 @@ struct StoreChecks {
     let store = try FileSnapshotStore(directoryURL: root, createIfNeeded: true)
     let widgetStore = try FileSnapshotStore(directoryURL: root, createIfNeeded: false)
     let now = Date(timeIntervalSince1970: 1_000_000)
+    expect(try store.reminderPreferences().days == [30, 7, 1], "未配置时沿用默认提醒档位")
+    let customReminders = try ReminderPreferences.standard.adding(14, at: now)
+    try store.replaceReminderPreferences(customReminders)
+    expect(try widgetStore.reminderPreferences() == customReminders, "Widget 应读到同一提醒配置")
+    try store.replaceReminderPreferences(ReminderPreferences(thresholds: []))
+    expect(try store.reminderPreferences().days.isEmpty, "空档位应与缺省配置区分")
     let first = WatchedDomain(hostname: "first.example", addedAt: now)
     let second = WatchedDomain(hostname: "second.example", addedAt: now)
     try store.replaceDomains([first, second])
@@ -107,6 +113,16 @@ struct StoreChecks {
     expect((try? store.snapshots()) == nil, "共享文件链接不能被当作正常数据")
     try FileManager.default.removeItem(at: snapshotFile)
     try FileManager.default.moveItem(at: original, to: snapshotFile)
+
+    let reminderConfig = root.appendingPathComponent("config/reminder-thresholds.v1.json")
+    try Data("无效提醒设置".utf8).write(to: reminderConfig, options: .atomic)
+    expect((try? store.reminderPreferences()) == nil, "损坏的提醒配置不能静默回退默认")
+    expect(
+      (try? store.replaceReminderPreferences(customReminders)) == nil,
+      "损坏的提醒配置不得被新设置覆盖")
+    expect(
+      try Data(contentsOf: reminderConfig) == Data("无效提醒设置".utf8),
+      "损坏的提醒配置必须保留")
 
     let config = root.appendingPathComponent("config/domains.v1.json")
     try Data("无效数据".utf8).write(to: config, options: .atomic)

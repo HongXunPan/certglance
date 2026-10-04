@@ -22,7 +22,8 @@ swift_cache=(
 
 printf '[开始] 模型规则\n'
 xcrun swiftc -swift-version 6 -parse-as-library "${swift_cache[@]}" \
-  Shared/DomainModels.swift Shared/NotificationPolicy.swift Tests/ModelChecks.swift \
+  Shared/DomainModels.swift Shared/CertificateDisplayGrouping.swift \
+  Shared/ReminderPreferences.swift Shared/NotificationPolicy.swift Tests/ModelChecks.swift \
   -o "${temp}/ModelChecks"
 "${temp}/ModelChecks"
 
@@ -46,13 +47,15 @@ xcrun swiftc -swift-version 6 -parse-as-library "${swift_cache[@]}" \
 
 printf '[开始] 文件桥接仓储\n'
 xcrun swiftc -swift-version 6 -parse-as-library "${swift_cache[@]}" \
-  Shared/DomainModels.swift Shared/SharedStore.swift Tests/StoreChecks.swift \
+  Shared/DomainModels.swift Shared/ReminderPreferences.swift Shared/SharedStore.swift \
+  Tests/StoreChecks.swift \
   -o "${temp}/StoreChecks"
 "${temp}/StoreChecks" "${temp}"
 
 printf '[开始] Widget 自动检查排他锁\n'
 xcrun swiftc -swift-version 6 -parse-as-library "${swift_cache[@]}" \
-  Shared/DomainModels.swift Shared/SharedStore.swift Tests/WidgetRefreshLeaseChecks.swift \
+  Shared/DomainModels.swift Shared/ReminderPreferences.swift Shared/SharedStore.swift \
+  Tests/WidgetRefreshLeaseChecks.swift \
   -o "${temp}/WidgetRefreshLeaseChecks"
 "${temp}/WidgetRefreshLeaseChecks" "${temp}/widget-lease"
 
