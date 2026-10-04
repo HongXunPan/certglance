@@ -1,0 +1,48 @@
+name: CertGlance 无签名检查
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: certglance-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: 静态检查与双架构构建
+    runs-on: macos-26
+    timeout-minutes: 25
+    steps:
+      - name: 检出开源子仓
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 版本 7.0.1
+        with:
+          persist-credentials: false
+
+      - name: 检查脚本语法与两个工程
+        run: |
+          bash -n scripts/check-certglance.sh scripts/check-widget-sharing-poc.sh \
+            scripts/package-certglance.sh scripts/package-widget-sharing-poc.sh \
+            scripts/render-visual-previews.sh
+          bash scripts/check-certglance.sh
+          bash scripts/check-widget-sharing-poc.sh
+
+      - name: 构建正式 App 与 Widget
+        run: |
+          xcodebuild -quiet -project SSLWidget.xcodeproj -scheme SSLWidget \
+            -configuration Debug -destination 'generic/platform=macOS' \
+            -derivedDataPath .build/CertGlance-CI \
+            ARCHS='arm64 x86_64' ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO build
+
+      - name: 构建独立假数据 PoC
+        run: |
+          xcodebuild -quiet -project PoC/WidgetSharing/WidgetSharingPoC.xcodeproj \
+            -scheme WidgetSharingPoC -configuration Debug \
+            -destination 'generic/platform=macOS' \
+            -derivedDataPath .build/WidgetSharingPoC-CI \
+            ARCHS='arm64 x86_64' ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO build

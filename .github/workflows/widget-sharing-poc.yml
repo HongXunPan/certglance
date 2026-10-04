@@ -22,7 +22,7 @@ jobs:
     timeout-minutes: 12
     steps:
       - name: 检出开源子仓
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 版本 7.0.1
         with:
           persist-credentials: false
 
@@ -35,19 +35,8 @@ jobs:
 
       - name: 校验 PoC 结构与脚本
         run: |
-          bash -n scripts/package-widget-sharing-poc.sh
-          plutil -lint \
-            PoC/WidgetSharing/WidgetSharingPoC.xcodeproj/project.pbxproj \
-            PoC/WidgetSharing/App/Info.plist \
-            PoC/WidgetSharing/Helper/Info.plist \
-            PoC/WidgetSharing/Widget/Info.plist \
-            PoC/WidgetSharing/App/App.entitlements \
-            PoC/WidgetSharing/Widget/Widget.entitlements
-          xcrun swift format lint --recursive --strict \
-            PoC/WidgetSharing/App \
-            PoC/WidgetSharing/Helper \
-            PoC/WidgetSharing/Widget \
-            PoC/WidgetSharing/Shared
+          bash -n scripts/check-widget-sharing-poc.sh scripts/package-widget-sharing-poc.sh
+          bash scripts/check-widget-sharing-poc.sh
 
       - name: 使用 SSL Widget 专用证书打包
         env:
@@ -58,7 +47,7 @@ jobs:
         run: bash scripts/package-widget-sharing-poc.sh
 
       - name: 上传候选 DMG 与静态核验结果
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 版本 7 系列
         with:
           name: ssl-widget-sharing-poc-${{ github.run_number }}
           path: |
