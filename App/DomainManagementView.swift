@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct DomainManagementView: View {
+  @Environment(\.appearsActive) private var appearsActive
   @ObservedObject var model: DashboardModel
   @State private var domainToRemove: String?
   @State private var isShowingAddSheet = false
@@ -135,6 +136,18 @@ struct DomainManagementView: View {
       Text("这个端点的检查记录和待发送提醒也会移除。")
     }
     .task { await model.load() }
+    .task(id: appearsActive) {
+      guard appearsActive else { return }
+      model.reloadStoredData()
+      while !Task.isCancelled {
+        do {
+          try await Task.sleep(for: .seconds(30 * 60))
+        } catch {
+          return
+        }
+        model.reloadStoredData()
+      }
+    }
   }
 
   private var heading: some View {
