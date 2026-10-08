@@ -50,6 +50,18 @@ final class DashboardModel: ObservableObject {
     await enqueueRefresh(.due)
   }
 
+  func reloadStoredData() {
+    guard let store, storageError == nil else { return }
+    do {
+      let latestDomains = try store.domains()
+      let latestSnapshots = try store.snapshots()
+      domains = latestDomains
+      snapshots = latestSnapshots
+    } catch {
+      storageError = error.localizedDescription
+    }
+  }
+
   func refreshReminderPreferences() {
     guard let store else {
       reminderSettingsError = storageError ?? "共享数据不可用。"
