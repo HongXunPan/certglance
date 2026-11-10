@@ -115,7 +115,7 @@ final class DashboardModel: ObservableObject {
     reminderPreferences = updated
     reminderSettingsError = nil
     do {
-      try await notifications.synchronize(store: store)
+      try await notifications.synchronizeMonitors(store: store)
     } catch {
       reminderSettingsError = "设置已保存，但提醒重排失败：\(error.localizedDescription)"
     }
@@ -171,6 +171,10 @@ final class DashboardModel: ObservableObject {
     await enqueueRefresh(.all)
   }
 
+  func refreshDue() async {
+    await enqueueRefresh(.due)
+  }
+
   func dismissActionMessage() {
     lastActionMessage = nil
   }
@@ -211,7 +215,7 @@ final class DashboardModel: ObservableObject {
 
   private func synchronizeNotifications(store: any SnapshotStore) async {
     do {
-      try await notifications.synchronize(store: store)
+      try await notifications.synchronizeMonitors(store: store)
     } catch {
       alertMessage = "证书数据已保留，但提醒同步失败：\(error.localizedDescription)"
     }

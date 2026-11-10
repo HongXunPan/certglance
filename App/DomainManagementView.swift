@@ -135,7 +135,6 @@ struct DomainManagementView: View {
     } message: { _ in
       Text("这个端点的检查记录和待发送提醒也会移除。")
     }
-    .task { await model.load() }
     .task(id: appearsActive) {
       guard appearsActive else { return }
       model.reloadStoredData()

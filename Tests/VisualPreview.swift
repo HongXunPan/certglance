@@ -19,6 +19,7 @@ struct CertGlanceVisualQA {
     _ = NSApplication.shared
     let output = URL(fileURLWithPath: CommandLine.arguments[1], isDirectory: true)
     try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+    try RegistrationVisualPreview.renderAll(output: output)
 
     let date = Date(timeIntervalSince1970: 1_780_000_000)
     let normal = normalFixture(at: date)
@@ -182,7 +183,7 @@ struct CertGlanceVisualQA {
     try save(view, name: name, output: output)
   }
 
-  private static func save<V: View>(_ view: V, name: String, output: URL) throws {
+  static func save<V: View>(_ view: V, name: String, output: URL) throws {
     let renderer = ImageRenderer(content: view)
     renderer.scale = 2
     renderer.isOpaque = true

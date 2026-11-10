@@ -60,4 +60,7 @@ xcrun swiftc -swift-version 6 -parse-as-library "${swift_cache[@]}" \
   -o "${temp}/WidgetRefreshLeaseChecks"
 "${temp}/WidgetRefreshLeaseChecks" "${temp}/widget-lease"
 
+printf '[开始] 注册域名协议、仓储与提醒规则\n'
+bash scripts/check-registration.sh
+
 printf '[通过] 静态和定点规则检查完成；尚未验证签名安装与 WidgetKit 运行态。\n'
