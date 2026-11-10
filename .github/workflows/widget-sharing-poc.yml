@@ -47,7 +47,7 @@ jobs:
         run: bash scripts/package-widget-sharing-poc.sh
 
       - name: 上传候选 DMG 与静态核验结果
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # 版本 7 系列
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # 版本 7 系列
         with:
           name: ssl-widget-sharing-poc-${{ github.run_number }}
           path: |
