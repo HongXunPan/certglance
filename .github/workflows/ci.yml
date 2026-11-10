@@ -27,7 +27,8 @@ jobs:
       - name: 检查脚本语法与两个工程
         run: |
           bash -n scripts/check-certglance.sh scripts/check-widget-sharing-poc.sh \
-            scripts/package-certglance.sh scripts/package-widget-sharing-poc.sh \
+            scripts/package-certglance.sh scripts/build-upgrader.sh \
+            scripts/package-widget-sharing-poc.sh \
             scripts/render-visual-previews.sh
           bash scripts/check-certglance.sh
           bash scripts/check-widget-sharing-poc.sh
