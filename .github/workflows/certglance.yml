@@ -30,7 +30,8 @@ jobs:
 
       - name: 静态与定点检查
         run: |
-          bash -n scripts/check-certglance.sh scripts/package-certglance.sh
+          bash -n scripts/check-certglance.sh scripts/package-certglance.sh \
+            scripts/build-upgrader.sh
           bash scripts/check-certglance.sh
 
       - name: 使用项目专用证书打包

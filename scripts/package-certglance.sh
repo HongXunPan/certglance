@@ -189,9 +189,16 @@ for scope in \
   fi
 done
 
-printf '[开始] 制作非公证 DMG\n'
+printf '[开始] 制作独立升级器\n'
 mkdir -p "${staging}" "${mount}"
 ditto "${app}" "${staging}/CertGlance.app"
+bash "${root}/scripts/build-upgrader.sh" \
+  "${app}" "${staging}/升级 CertGlance.app" "${identity_sha1}" "${temp}/upgrade-build"
+cp "${root}/Upgrader/安装说明.txt" "${staging}/安装说明.txt"
+requirement="$(codesign -dr - "${staging}/升级 CertGlance.app" 2>&1)"
+grep -Fq "certificate leaf = H\"${expected_sha1}\"" <<<"${requirement}" ||
+  fail '升级器签名身份不匹配'
+printf '[开始] 制作非公证 DMG\n'
 ln -s /Applications "${staging}/Applications"
 hdiutil create -ov -volname CertGlance -srcfolder "${staging}" -format UDZO "${dmg}"
 codesign --force --sign "${identity_sha1}" --timestamp=none "${dmg}"
@@ -199,8 +206,12 @@ codesign --verify --verbose=2 "${dmg}"
 hdiutil attach -readonly -nobrowse -mountpoint "${mount}" "${dmg}"
 mounted=1
 codesign --verify --deep --strict --verbose=2 "${mount}/CertGlance.app"
+codesign --verify --deep --strict --verbose=2 "${mount}/升级 CertGlance.app"
 [[ -d "${mount}/CertGlance.app/Contents/PlugIns/SSLExpiryWidget.appex" ]] ||
   fail 'DMG 内缺少 Widget 扩展'
+[[ -f "${mount}/升级 CertGlance.app/Contents/Resources/CertGlance.zip" ]] ||
+  fail 'DMG 内缺少升级器安装包'
+[[ -f "${mount}/安装说明.txt" ]] || fail 'DMG 内缺少安装说明'
 hdiutil detach "${mount}"
 mounted=0
 (cd "${root}/dist" && shasum -a 256 CertGlance.dmg >SHA256SUMS)
@@ -217,7 +228,7 @@ Widget Bundle ID：com.HongXunPan.CertGlance.Widget
 叶证书 SHA-1 前 12 位：${expected_sha1:0:12}
 共享目录：~/Library/Application Support/com.HongXunPan.CertGlance/
 权限：宿主根目录读写；Widget 仅 config/ 只读、state/ 读写；保留沙盒与网络客户端权限
-静态结果：双架构、嵌入扩展、签名、文件权限、DMG 内签名与 SHA-256 已核验
-未验证：新安装后的真实 TLS 检查、WidgetKit 时间线、跨进程文件桥接、系统通知授权和投递；Finder 覆盖升级不支持
+静态结果：双架构、嵌入扩展、签名、文件权限、独立升级器、DMG 内签名与 SHA-256 已核验
+未验证：新安装后的真实 TLS 检查、WidgetKit 时间线、跨进程文件桥接、系统通知授权和投递；升级器的桌面组件原位置保留仍待实机验收，Finder 覆盖升级不支持
 EOF
 printf '[通过] 正式候选 DMG、校验和和静态报告位于 dist/\n'

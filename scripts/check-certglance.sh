@@ -10,15 +10,20 @@ cd "${root}"
 
 printf '[开始] 工程与权限结构\n'
 plutil -lint SSLWidget.xcodeproj/project.pbxproj \
-  App/Info.plist Widget/Info.plist App/App.entitlements Widget/Widget.entitlements
+  App/Info.plist Widget/Info.plist Upgrader/Info.plist \
+  App/App.entitlements Widget/Widget.entitlements
 
 printf '[开始] Swift 格式\n'
-xcrun swift format lint --recursive --strict App Widget Shared Tests scripts
+xcrun swift format lint --recursive --strict App Widget Shared Tests Upgrader scripts
 
 swift_cache=(
   -module-cache-path "${temp}/SwiftModuleCache"
   -Xcc "-fmodules-cache-path=${temp}/ClangModuleCache"
 )
+
+printf '[开始] 独立升级器编译检查\n'
+xcrun swiftc -swift-version 6 -typecheck "${swift_cache[@]}" \
+  Upgrader/UpgradeInstaller.swift Upgrader/CertGlanceUpgradeApp.swift
 
 printf '[开始] 模型规则\n'
 xcrun swiftc -swift-version 6 -parse-as-library "${swift_cache[@]}" \

@@ -24,7 +24,7 @@ CertGlance 在系统桌面小组件中快速呈现最需要关注的证书；宿
 
 ## 项目状态
 
-**较早构建已在一台 Mac 上通过签名安装与基础功能实机验收；当前源码版本为 0.1.2（构建 12），主界面共享快照同步及本次 HTTP 诊断尚待安装验收；详情入口此前已在实机出现，但键盘、VoiceOver、可调提醒投递及新版小组件的完整回归仍待逐项验收。**源码包含自签名文件桥接、真实 TLS 检查、默认可调整的 30／7／1 天提醒与自动小／中／大尺寸及固定小尺寸 Widget。手动 GitHub Actions 可生成非公证 DMG；CI 静态签名通过不等于新构建的小组件、跨进程文件共享或系统通知投递已在用户电脑上通过。小组件刷新由 macOS 调度，不能作为全天候生产告警的唯一渠道。
+**较早构建已在一台 Mac 上通过签名安装与基础功能实机验收；当前源码版本为 0.1.3（构建 13），DMG 内独立升级器尚待正式签名包与桌面组件原位置保留验收；主界面共享快照同步及 HTTP 诊断尚待安装验收；详情入口此前已在实机出现，但键盘、VoiceOver、可调提醒投递及新版小组件的完整回归仍待逐项验收。**源码包含自签名文件桥接、真实 TLS 检查、默认可调整的 30／7／1 天提醒与自动小／中／大尺寸及固定小尺寸 Widget。手动 GitHub Actions 可生成非公证 DMG；CI 静态签名通过不等于新构建的小组件、跨进程文件共享或系统通知投递已在用户电脑上通过。小组件刷新由 macOS 调度，不能作为全天候生产告警的唯一渠道。
 
 Xcode 工程与 scheme 沿用内部名称 `SSLWidget`，正式宿主 Bundle ID 为 `com.HongXunPan.CertGlance`，Widget Bundle ID 为 `com.HongXunPan.CertGlance.Widget`。技术边界见[工程代码技术选型](docs/工程代码技术选型.md)。
 
@@ -43,7 +43,7 @@ xcodebuild -project SSLWidget.xcodeproj -scheme SSLWidget -destination 'platform
 
 ## 安装候选
 
-手动工作流 [CertGlance 正式候选打包](.github/workflows/certglance.yml) 使用项目专用自签名证书生成双架构、非公证 DMG，不自动发布 Release。首次安装、系统安全提示、签名校验、运行态验收和已知升级限制见[正式候选验收](docs/正式候选验收.md)。不要把假数据 PoC DMG 当成正式 App，也不要用 Finder 拖拽覆盖已安装的旧版作为已支持升级方式。
+手动工作流 [CertGlance 正式候选打包](.github/workflows/certglance.yml) 使用项目专用自签名证书生成双架构、非公证 DMG，不自动发布 Release。DMG 保留首次安装用的 `CertGlance.app`，另提供尚待实机验收的“升级 CertGlance.app”；它只做显式确认后的固定位置受控替换，不自动提权或后台更新。首次安装、系统安全提示、签名校验、升级验收和已知限制见[正式候选验收](docs/正式候选验收.md)。不要把假数据 PoC DMG 当成正式 App，也不要用 Finder 拖拽覆盖已安装的旧版。
 
 证书检查会连接用户添加的端点，配置与检查记录保存在当前账户本机。数据范围、通知内容与清除方式见[隐私与数据](docs/隐私与数据.md)。
 
