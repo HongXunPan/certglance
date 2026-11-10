@@ -16,7 +16,8 @@ struct CertificateChecker: Sendable {
     guard let url = components.url else {
       return CertificateSnapshot(
         hostname: domain.hostname, checkedAt: checkedAt,
-        expiresAt: nil, checkState: .failed, detail: "无法构造检查地址", port: domain.port)
+        expiresAt: nil, checkState: .failed, detail: "无法构造检查地址", port: domain.port,
+        failureReason: .invalidAddress, httpResponse: HTTPResponseObservation(statusCode: nil))
     }
 
     let capture = CertificateTrustCapture(hostname: domain.hostname, port: domain.port)
@@ -31,20 +32,30 @@ struct CertificateChecker: Sendable {
     request.httpMethod = "HEAD"
     request.timeoutInterval = 8
     var requestError: Error?
-    do { _ = try await session.data(for: request) } catch { requestError = error }
+    var httpStatusCode: Int?
+    do {
+      let (_, response) = try await session.data(for: request)
+      httpStatusCode = (response as? HTTPURLResponse)?.statusCode
+    } catch {
+      requestError = error
+    }
 
     if let observed = capture.observed {
       return CertificateSnapshot(
         hostname: domain.hostname, checkedAt: checkedAt, expiresAt: observed.expiresAt,
         checkState: observed.isTrusted ? .trusted : .untrusted,
         detail: observed.isTrusted ? nil : "证书链或域名校验未通过", port: domain.port,
-        validFrom: observed.validFrom
+        validFrom: observed.validFrom,
+        httpResponse: HTTPResponseObservation(
+          statusCode: observed.isTrusted ? httpStatusCode : nil)
       )
     }
     return CertificateSnapshot(
       hostname: domain.hostname, checkedAt: checkedAt, expiresAt: nil,
       checkState: .failed,
-      detail: Self.failureDescription(requestError, port: domain.port), port: domain.port
+      detail: Self.failureDescription(requestError, port: domain.port), port: domain.port,
+      failureReason: CertificateFailureReason(error: requestError),
+      httpResponse: HTTPResponseObservation(statusCode: nil)
     )
   }
 
@@ -112,7 +123,7 @@ private final class CertificateTrustCapture: NSObject, URLSessionDelegate, URLSe
       validFrom: SecCertificateCopyNotValidBeforeDate(leaf) as Date?,
       expiresAt: expiresAt, isTrusted: isTrusted)
     lock.unlock()
-    completionHandler(.cancelAuthenticationChallenge, nil)
+    completionHandler(isTrusted ? .performDefaultHandling : .cancelAuthenticationChallenge, nil)
   }
 
   func urlSession(

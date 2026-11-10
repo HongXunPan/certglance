@@ -44,6 +44,14 @@ struct ModelChecks {
     expect(snapshot(days: -1).severity(at: now) == .expired, "已过期应优先呈现")
     expect(snapshot(days: 60, state: .untrusted).severity(at: now) == .untrusted, "不受信任不得显示为正常")
     expect(snapshot(days: 60, state: .failed).severity(at: now) == .checkFailed, "连接失败不得显示为正常")
+    expect(CertificateFailureReason(error: URLError(.timedOut)) == .timedOut, "超时应保留稳定失败类别")
+    expect(
+      CertificateFailureReason(error: URLError(.cannotFindHost)) == .hostNotFound,
+      "域名解析失败应区别于连接超时")
+    expect(CertificateFailureReason(error: nil) == .unknown, "未知错误不得推断具体网络阶段")
+    let futureReason = try JSONDecoder().decode(
+      CertificateFailureReason.self, from: Data("\"futureReason\"".utf8))
+    expect(futureReason == .unknown, "未知的未来失败类别不能阻断旧版快照读取")
 
     let validity = CertificateSnapshot(
       hostname: "example.com", checkedAt: now,

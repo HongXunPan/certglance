@@ -99,12 +99,38 @@ struct CertificateCheckDetails: View {
       if let snapshot {
         Text("最近检查：\(snapshot.checkedAt.formatted(date: .abbreviated, time: .shortened))")
         if snapshot.checkState == .failed {
+          Text("失败原因：\(snapshot.detail ?? "未能读取服务器证书")")
+          if let reason = snapshot.failureReason {
+            Text(reason.explanation)
+            Text("建议：\(reason.suggestion(port: snapshot.port))")
+          } else {
+            Text("本次未读取到证书；仅凭这条记录无法判断目标站点或网络哪个环节故障。")
+          }
           if let successfulAt = snapshot.lastSuccessfulCheckAt {
             Text("最近成功：\(successfulAt.formatted(date: .abbreviated, time: .shortened))")
           } else {
             Text("尚无成功检查")
           }
           Text("连续失败：\(snapshot.consecutiveFailureCount) 次")
+        } else if snapshot.checkState == .untrusted {
+          Text("证书问题：\(snapshot.detail ?? "系统未通过证书信任校验")")
+          Text("为避免绕过系统校验，本次没有继续获取 HTTP 响应。")
+        }
+        if let response = snapshot.httpResponse {
+          if let statusCode = response.statusCode {
+            Text("HTTPS HEAD 响应：HTTP \(statusCode)")
+            if statusCode == 405 {
+              Text("目标不允许本次 HEAD 请求；这不代表证书无效。")
+            } else if (500...599).contains(statusCode) {
+              Text("目标对本次 HEAD 请求返回服务器错误；证书结果仍独立计算。")
+            } else {
+              Text("HTTP 状态仅表示站点响应，不改变证书检查结果。")
+            }
+          } else {
+            Text("HTTPS HEAD 响应：本次未取得 HTTP 状态")
+          }
+        } else {
+          Text("HTTPS HEAD 响应：旧记录未采集，下次检查后更新")
         }
       } else {
         Text("尚未检查")

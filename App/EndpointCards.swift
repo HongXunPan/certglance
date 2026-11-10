@@ -61,7 +61,9 @@ struct CertificateFocusCard: View {
           }
         }
       }
-      CertificateDetailsDisclosure("证书详情", isExpanded: $detailsExpanded) {
+      CertificateDetailsDisclosure(
+        snapshot?.checkState == .failed ? "失败详情" : "证书详情", isExpanded: $detailsExpanded
+      ) {
         VStack(alignment: .leading, spacing: 5) {
           CertificateValidityDetails(snapshot: snapshot, date: date)
           CertificateCheckDetails(snapshot: snapshot)
@@ -110,75 +112,95 @@ struct CertificateEndpointRow: View {
   let snapshot: CertificateSnapshot?
   let date: Date
   let onRemove: () -> Void
+  @State private var detailsExpanded = false
 
   private var severity: CertificateSeverity {
     snapshot?.severity(at: date) ?? .unchecked
   }
 
   var body: some View {
-    HStack(alignment: .center, spacing: 12) {
-      VStack(alignment: .leading, spacing: 5) {
-        Text(domain.displayName)
-          .font(.headline)
+    VStack(alignment: .leading, spacing: 0) {
+      HStack(alignment: .center, spacing: 12) {
+        VStack(alignment: .leading, spacing: 5) {
+          Text(domain.displayName)
+            .font(.headline)
+            .lineLimit(1)
+            .truncationMode(.middle)
+            .textSelection(.enabled)
+            .help(domain.displayName)
+          HStack(spacing: 5) {
+            Image(systemName: severity.symbol)
+              .foregroundStyle(severity.tint)
+              .accessibilityHidden(true)
+            Text(statusLabel)
+            if let snapshot {
+              Text("· 检查 \(snapshot.checkedAt.formatted(date: .abbreviated, time: .shortened))")
+                .foregroundStyle(.secondary)
+            }
+          }
+          .font(.caption)
           .lineLimit(1)
-          .truncationMode(.middle)
-          .textSelection(.enabled)
-          .help(domain.displayName)
-        HStack(spacing: 5) {
-          Image(systemName: severity.symbol)
-            .foregroundStyle(severity.tint)
-            .accessibilityHidden(true)
-          Text(statusLabel)
-          if let snapshot {
-            Text("· 检查 \(snapshot.checkedAt.formatted(date: .abbreviated, time: .shortened))")
+          if let detail = snapshot?.detail {
+            Text(detail)
+              .font(.caption2)
+              .foregroundStyle(.secondary)
+              .lineLimit(1)
+          }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(alignment: .trailing, spacing: 3) {
+          if let days = snapshot?.daysRemaining(at: date), snapshot?.checkState == .trusted {
+            Text("\(max(days, 0)) 天")
+              .font(.system(.headline, design: .rounded, weight: .bold).monospacedDigit())
+          } else {
+            Text("—")
+              .font(.headline)
+              .foregroundStyle(.secondary)
+          }
+          if let snapshot, let expiry = snapshot.expiresAt {
+            Text(
+              "\(snapshot.checkState == .failed ? "已知到期" : "到期") \(expiry.formatted(date: .abbreviated, time: .omitted))"
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+          } else {
+            Text("等待首次检查")
+              .font(.caption)
               .foregroundStyle(.secondary)
           }
         }
-        .font(.caption)
-        .lineLimit(1)
-        if let detail = snapshot?.detail {
-          Text(detail)
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
+        .frame(width: 128, alignment: .trailing)
+        Menu {
+          Button("移除端点", role: .destructive, action: onRemove)
+        } label: {
+          Image(systemName: "ellipsis.circle")
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .frame(width: 28, height: 28)
+        .accessibilityLabel("管理 \(domain.displayName)")
+      }
+      if showsCheckDetails {
+        CertificateDetailsDisclosure(checkDetailsTitle, isExpanded: $detailsExpanded) {
+          CertificateCheckDetails(snapshot: snapshot)
         }
       }
-      .frame(maxWidth: .infinity, alignment: .leading)
-      VStack(alignment: .trailing, spacing: 3) {
-        if let days = snapshot?.daysRemaining(at: date), snapshot?.checkState == .trusted {
-          Text("\(max(days, 0)) 天")
-            .font(.system(.headline, design: .rounded, weight: .bold).monospacedDigit())
-        } else {
-          Text("—")
-            .font(.headline)
-            .foregroundStyle(.secondary)
-        }
-        if let snapshot, let expiry = snapshot.expiresAt {
-          Text(
-            "\(snapshot.checkState == .failed ? "已知到期" : "到期") \(expiry.formatted(date: .abbreviated, time: .omitted))"
-          )
-          .font(.caption)
-          .foregroundStyle(.secondary)
-          .lineLimit(1)
-        } else {
-          Text("等待首次检查")
-            .font(.caption)
-            .foregroundStyle(.secondary)
-        }
-      }
-      .frame(width: 128, alignment: .trailing)
-      Menu {
-        Button("移除端点", role: .destructive, action: onRemove)
-      } label: {
-        Image(systemName: "ellipsis.circle")
-      }
-      .menuStyle(.borderlessButton)
-      .menuIndicator(.hidden)
-      .frame(width: 28, height: 28)
-      .accessibilityLabel("管理 \(domain.displayName)")
     }
     .padding(.vertical, 5)
     .accessibilityElement(children: .contain)
+  }
+
+  private var showsCheckDetails: Bool {
+    snapshot?.checkState == .failed || (snapshot?.httpResponse?.statusCode ?? 0) >= 400
+  }
+
+  private var checkDetailsTitle: String {
+    if snapshot?.checkState == .failed { return "失败详情" }
+    if let status = snapshot?.httpResponse?.statusCode {
+      return "HTTPS HEAD：HTTP \(status)"
+    }
+    return "检查详情"
   }
 
   private var statusLabel: String {

@@ -34,7 +34,8 @@ struct StoreChecks {
     let validFrom = now.addingTimeInterval(-85 * 86_400)
     let trusted = CertificateSnapshot(
       hostname: first.hostname, checkedAt: now, expiresAt: expiry,
-      checkState: .trusted, detail: nil, validFrom: validFrom)
+      checkState: .trusted, detail: nil, validFrom: validFrom,
+      httpResponse: HTTPResponseObservation(statusCode: 503))
     let other = CertificateSnapshot(
       hostname: second.hostname, checkedAt: now,
       expiresAt: now.addingTimeInterval(60 * 86_400), checkState: .trusted, detail: nil)
@@ -43,14 +44,23 @@ struct StoreChecks {
     expect(
       initial.first?.lastSuccessfulCheckAt == now && initial.first?.consecutiveFailureCount == 0,
       "成功读取证书应记录成功时间并清零连续失败")
+    expect(
+      initial.first?.checkState == .trusted && initial.first?.httpResponse?.statusCode == 503,
+      "HTTP 503 不得改变证书可信状态")
 
     let failed = CertificateSnapshot(
       hostname: first.hostname, checkedAt: now.addingTimeInterval(10),
-      expiresAt: nil, checkState: .failed, detail: "连接超时")
+      expiresAt: nil, checkState: .failed, detail: "连接超时",
+      failureReason: .timedOut, httpResponse: HTTPResponseObservation(statusCode: nil))
     let afterFailure = try store.mergeSnapshots([failed])
     expect(afterFailure.first?.checkState == .failed, "失败不能被旧成功状态覆盖")
     expect(afterFailure.first?.expiresAt == expiry, "失败应保留已知截止时间")
     expect(afterFailure.first?.validFrom == validFrom, "失败应保留同一证书的有效期起点")
+    expect(
+      afterFailure.first?.failureReason == .timedOut
+        && afterFailure.first?.httpResponse != nil
+        && afterFailure.first?.httpResponse?.statusCode == nil,
+      "失败应记录原因和本次未取得 HTTP 状态，不沿用旧状态码")
     expect(
       afterFailure.first?.lastSuccessfulCheckAt == now
         && afterFailure.first?.consecutiveFailureCount == 1,
@@ -95,7 +105,8 @@ struct StoreChecks {
     expect(
       migrated.first?.lastSuccessfulCheckAt == now
         && migrated.first?.consecutiveFailureCount == 0 && migrated.first?.port == 443
-        && migrated.first?.validFrom == nil,
+        && migrated.first?.validFrom == nil && migrated.first?.httpResponse == nil
+        && migrated.first?.failureReason == nil,
       "旧版快照应推断成功时间并补齐失败次数")
     let alternate = WatchedDomain(hostname: first.hostname, port: 8443, addedAt: now)
     try store.replaceDomains([first, alternate, second])

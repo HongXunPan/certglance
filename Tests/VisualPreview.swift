@@ -30,6 +30,13 @@ struct CertGlanceVisualQA {
 
     try renderDashboard("主界面-常态-浅色", fixture: normal, scheme: .light, output: output)
     try renderDashboard("主界面-复杂-深色", fixture: stress, scheme: .dark, output: output)
+    try renderCheckDetails(
+      "证书失败详情-浅色", snapshot: stress.snapshots[1], scheme: .light, output: output)
+    let httpFailure = snapshot(
+      for: normal.domains[2], at: date, days: 49,
+      httpResponse: HTTPResponseObservation(statusCode: 500))
+    try renderCheckDetails(
+      "证书可信但HTTP500-深色", snapshot: httpFailure, scheme: .dark, output: output)
     try renderWidget(
       "自动小号-浅色", entry: normal, family: .systemSmall,
       width: 164, height: 164, scheme: .light, output: output)
@@ -160,6 +167,21 @@ struct CertGlanceVisualQA {
     try save(view, name: name, output: output)
   }
 
+  private static func renderCheckDetails(
+    _ name: String, snapshot: CertificateSnapshot, scheme: ColorScheme, output: URL
+  ) throws {
+    let view = VStack(alignment: .leading, spacing: 10) {
+      Text(name)
+        .font(.headline)
+      CertificateCheckDetails(snapshot: snapshot)
+    }
+    .padding(20)
+    .frame(width: 620, height: 240, alignment: .topLeading)
+    .background(Color(nsColor: .windowBackgroundColor))
+    .environment(\.colorScheme, scheme)
+    try save(view, name: name, output: output)
+  }
+
   private static func save<V: View>(_ view: V, name: String, output: URL) throws {
     let renderer = ImageRenderer(content: view)
     renderer.scale = 2
@@ -198,7 +220,9 @@ struct CertGlanceVisualQA {
       snapshot(for: domains[0], at: date, days: -2),
       snapshot(
         for: domains[1], at: date, days: 8, state: .failed,
-        detail: "连接超时，暂时无法读取新证书", failures: 3),
+        detail: "连接超时，暂时无法读取新证书", failures: 3,
+        failureReason: .timedOut,
+        httpResponse: HTTPResponseObservation(statusCode: nil)),
       snapshot(for: domains[2], at: date, days: 30, state: .untrusted),
       snapshot(for: domains[3], at: date, days: 1),
       snapshot(for: domains[5], at: date, days: 250),
@@ -226,7 +250,8 @@ struct CertGlanceVisualQA {
   private static func snapshot(
     for domain: WatchedDomain, at date: Date, days: Double,
     state: CertificateCheckState = .trusted, detail: String? = nil, failures: Int = 0,
-    checkedAgo: TimeInterval = 3_600
+    checkedAgo: TimeInterval = 3_600, failureReason: CertificateFailureReason? = nil,
+    httpResponse: HTTPResponseObservation? = nil
   ) -> CertificateSnapshot {
     let checkedAt = date.addingTimeInterval(-checkedAgo)
     return CertificateSnapshot(
@@ -235,6 +260,7 @@ struct CertGlanceVisualQA {
       detail: detail,
       lastSuccessfulCheckAt: state == .failed ? date.addingTimeInterval(-7 * 86_400) : checkedAt,
       consecutiveFailureCount: failures, port: domain.port,
-      validFrom: date.addingTimeInterval(-75 * 86_400))
+      validFrom: date.addingTimeInterval(-75 * 86_400),
+      failureReason: failureReason, httpResponse: httpResponse)
   }
 }
