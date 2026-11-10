@@ -104,6 +104,72 @@ enum CertificateCheckState: String, Codable, Sendable {
   case failed
 }
 
+enum CertificateFailureReason: String, Codable, Sendable {
+  case invalidAddress
+  case hostNotFound
+  case timedOut
+  case networkUnavailable
+  case connectionLost
+  case cannotConnect
+  case secureConnectionFailed
+  case unknown
+
+  init(from decoder: Decoder) throws {
+    let rawValue = try decoder.singleValueContainer().decode(String.self)
+    self = Self(rawValue: rawValue) ?? .unknown
+  }
+
+  init(error: Error?) {
+    guard let error = error as? URLError else {
+      self = .unknown
+      return
+    }
+    switch error.code {
+    case .cannotFindHost: self = .hostNotFound
+    case .timedOut: self = .timedOut
+    case .notConnectedToInternet: self = .networkUnavailable
+    case .networkConnectionLost: self = .connectionLost
+    case .cannotConnectToHost: self = .cannotConnect
+    case .secureConnectionFailed: self = .secureConnectionFailed
+    default: self = .unknown
+    }
+  }
+
+  var explanation: String {
+    switch self {
+    case .invalidAddress: return "未能构造目标 HTTPS 地址，因此没有发出检查请求。"
+    case .hostNotFound: return "系统未能解析目标域名，本次没有连接到服务器。"
+    case .timedOut: return "请求在限定时间内未读取到服务器证书；仅凭超时无法断定是站点还是网络链路故障。"
+    case .networkUnavailable: return "当前网络不可用，本次没有读取到服务器证书。"
+    case .connectionLost: return "连接过程中网络中断，本次没有读取到服务器证书。"
+    case .cannotConnect: return "未能建立到目标端口的连接，本次没有读取到服务器证书。"
+    case .secureConnectionFailed: return "安全连接未能建立，本次没有读取到服务器证书。"
+    case .unknown: return "本次没有读取到服务器证书，系统未提供更明确的失败类别。"
+    }
+  }
+
+  func suggestion(port: Int) -> String {
+    switch self {
+    case .invalidAddress, .hostNotFound:
+      return "核对域名与端口是否输入正确，并检查 DNS 配置。"
+    case .timedOut:
+      return "检查目标 HTTPS 服务；如其他端点正常，可换网络或代理路径复测。"
+    case .networkUnavailable, .connectionLost:
+      return "检查本机网络后，再主动刷新。"
+    case .cannotConnect:
+      return "检查服务器是否监听 \(port) 端口，以及防火墙或代理路径。"
+    case .secureConnectionFailed:
+      return "检查服务器 TLS 配置，必要时换网络或代理路径复测。"
+    case .unknown:
+      return "核对目标 HTTPS 服务与网络状态，然后主动刷新。"
+    }
+  }
+}
+
+struct HTTPResponseObservation: Codable, Sendable, Equatable {
+  let statusCode: Int?
+}
+
 struct CertificateSnapshot: Codable, Identifiable, Sendable {
   let hostname: String
   let port: Int
@@ -112,13 +178,16 @@ struct CertificateSnapshot: Codable, Identifiable, Sendable {
   let expiresAt: Date?
   let checkState: CertificateCheckState
   let detail: String?
+  let failureReason: CertificateFailureReason?
+  let httpResponse: HTTPResponseObservation?
   let lastSuccessfulCheckAt: Date?
   let consecutiveFailureCount: Int
 
   init(
     hostname: String, checkedAt: Date, expiresAt: Date?, checkState: CertificateCheckState,
     detail: String?, lastSuccessfulCheckAt: Date? = nil, consecutiveFailureCount: Int = 0,
-    port: Int = 443, validFrom: Date? = nil
+    port: Int = 443, validFrom: Date? = nil,
+    failureReason: CertificateFailureReason? = nil, httpResponse: HTTPResponseObservation? = nil
   ) {
     self.hostname = hostname
     self.port = port
@@ -127,12 +196,15 @@ struct CertificateSnapshot: Codable, Identifiable, Sendable {
     self.expiresAt = expiresAt
     self.checkState = checkState
     self.detail = detail
+    self.failureReason = failureReason
+    self.httpResponse = httpResponse
     self.lastSuccessfulCheckAt = lastSuccessfulCheckAt ?? (checkState == .failed ? nil : checkedAt)
     self.consecutiveFailureCount = consecutiveFailureCount
   }
 
   private enum CodingKeys: String, CodingKey {
     case hostname, port, checkedAt, validFrom, expiresAt, checkState, detail
+    case failureReason, httpResponse
     case lastSuccessfulCheckAt, consecutiveFailureCount
   }
 
@@ -145,6 +217,9 @@ struct CertificateSnapshot: Codable, Identifiable, Sendable {
     expiresAt = try values.decodeIfPresent(Date.self, forKey: .expiresAt)
     checkState = try values.decode(CertificateCheckState.self, forKey: .checkState)
     detail = try values.decodeIfPresent(String.self, forKey: .detail)
+    failureReason = try values.decodeIfPresent(
+      CertificateFailureReason.self, forKey: .failureReason)
+    httpResponse = try values.decodeIfPresent(HTTPResponseObservation.self, forKey: .httpResponse)
     lastSuccessfulCheckAt =
       try values.decodeIfPresent(Date.self, forKey: .lastSuccessfulCheckAt)
       ?? (checkState == .failed ? nil : checkedAt)
