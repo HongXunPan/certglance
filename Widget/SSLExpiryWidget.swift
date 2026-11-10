@@ -18,5 +18,6 @@ struct CertGlanceWidgetBundle: WidgetBundle {
   var body: some Widget {
     SSLExpiryWidget()
     PinnedEndpointWidget()
+    RegistrationExpiryWidget()
   }
 }

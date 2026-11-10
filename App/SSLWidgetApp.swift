@@ -2,16 +2,16 @@ import SwiftUI
 
 @main
 struct SSLWidgetApp: App {
-  @StateObject private var model = DashboardModel()
+  @NSApplicationDelegateAdaptor(ApplicationLifecycleDelegate.self) private var lifecycle
 
   var body: some Scene {
     Window("CertGlance", id: "main") {
-      DomainManagementView(model: model)
+      MonitorWorkspaceView(session: lifecycle.session)
         .frame(minWidth: 560, minHeight: 460)
     }
     .defaultSize(width: 760, height: 640)
     Settings {
-      ReminderSettingsView(model: model)
+      ReminderSettingsView(model: lifecycle.session.certificates)
     }
   }
 }

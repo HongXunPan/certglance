@@ -9,7 +9,7 @@ struct ReminderSettingsView: View {
   var body: some View {
     Form {
       Section("到期前提醒") {
-        Text("每个 HTTPS 端点分别提醒；同日到期只在看板中合并显示。")
+        Text("证书端点与注册域名共用提醒天数，分别发送并去重；同日到期只在证书看板中合并显示。")
           .foregroundStyle(.secondary)
         if model.reminderPreferences.days.isEmpty {
           Text("当前没有到期前提醒。")
@@ -49,7 +49,7 @@ struct ReminderSettingsView: View {
       }
       Section("通知状态") {
         Text(model.notificationDescription)
-        Text("证书过期提醒独立保留；通知的实际投递时间由 macOS 决定。")
+        Text("到期档位独立保留；参考登记日期的通知会要求核对续费期限。实际投递由 macOS 决定。")
           .font(.caption)
           .foregroundStyle(.secondary)
         if let error = model.reminderSettingsError {

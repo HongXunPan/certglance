@@ -72,8 +72,9 @@ final class WidgetRefreshLease: @unchecked Sendable {
 
 final class FileSnapshotStore: SnapshotStore, @unchecked Sendable {
   private let root: URL
-  private let config: URL
-  private let state: URL
+  // 仅供同模块内的独立仓储扩展复用，路径始终由本仓储构造。
+  let config: URL
+  let state: URL
   private let lockURL: URL
 
   convenience init(createIfNeeded: Bool) throws {
@@ -241,7 +242,7 @@ final class FileSnapshotStore: SnapshotStore, @unchecked Sendable {
     }
   }
 
-  private func withLock<Value>(_ body: () throws -> Value) throws -> Value {
+  func withLock<Value>(_ body: () throws -> Value) throws -> Value {
     let descriptor = open(lockURL.path, O_CREAT | O_RDWR | O_NOFOLLOW, 0o600)
     guard descriptor >= 0 else { throw SharedStoreError.unavailable }
     defer { close(descriptor) }
@@ -250,7 +251,7 @@ final class FileSnapshotStore: SnapshotStore, @unchecked Sendable {
     return try body()
   }
 
-  private func read<Value: Decodable & ExpressibleByArrayLiteral>(
+  func read<Value: Decodable & ExpressibleByArrayLiteral>(
     _ type: Value.Type, from url: URL
   ) throws -> Value {
     var info = stat()
@@ -270,7 +271,7 @@ final class FileSnapshotStore: SnapshotStore, @unchecked Sendable {
     }
   }
 
-  private func write<Value: Encodable>(_ value: Value, to url: URL) throws {
+  func write<Value: Encodable>(_ value: Value, to url: URL) throws {
     var info = stat()
     if lstat(url.path, &info) == 0 {
       try verifyRegularFile(url)
