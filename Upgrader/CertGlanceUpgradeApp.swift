@@ -31,9 +31,15 @@ private final class UpgradeState: ObservableObject {
     Task {
       let result = await Task.detached { Result { try UpgradeInstaller.apply(plan) } }.value
       switch result {
-      case .success:
+      case .success(let outcome):
         isComplete = true
-        message = "已安装构建 \(plan.candidateBuild)。请检查原桌面小组件是否仍在。"
+        if outcome.widgetRecovery.unresolvedCount > 0 {
+          message = "已安装构建 \(plan.candidateBuild)，但旧小组件进程未能全部确认退出。请打开 App 检查各尺寸；若仍显示占位，勿重复覆盖。"
+        } else if outcome.widgetRecovery.signaledCount > 0 {
+          message = "已安装构建 \(plan.candidateBuild)，并已请求旧小组件进程退出。请打开 App 检查原位置与各尺寸显示。"
+        } else {
+          message = "已安装构建 \(plan.candidateBuild)。未发现仍运行的旧小组件进程；请检查原位置与各尺寸显示。"
+        }
       case .failure(let error):
         message = error.localizedDescription
       }

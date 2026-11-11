@@ -44,6 +44,7 @@ for arch in arm64 x86_64; do
     -module-cache-path "${work_dir}/SwiftModuleCache-${arch}" \
     -Xcc "-fmodules-cache-path=${work_dir}/ClangModuleCache-${arch}" \
     "${root}/Upgrader/UpgradeInstaller.swift" \
+    "${root}/Upgrader/WidgetExtensionProcess.swift" \
     "${root}/Upgrader/CertGlanceUpgradeApp.swift" \
     -o "${work_dir}/CertGlanceUpgrade-${arch}"
 done
