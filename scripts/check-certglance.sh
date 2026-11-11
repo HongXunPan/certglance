@@ -23,7 +23,14 @@ swift_cache=(
 
 printf '[开始] 独立升级器编译检查\n'
 xcrun swiftc -swift-version 6 -typecheck "${swift_cache[@]}" \
-  Upgrader/UpgradeInstaller.swift Upgrader/CertGlanceUpgradeApp.swift
+  Upgrader/UpgradeInstaller.swift Upgrader/WidgetExtensionProcess.swift \
+  Upgrader/CertGlanceUpgradeApp.swift
+
+printf '[开始] 旧扩展进程身份规则\n'
+xcrun swiftc -swift-version 6 -parse-as-library "${swift_cache[@]}" \
+  Upgrader/WidgetExtensionProcess.swift Tests/UpgradeProcessChecks.swift \
+  -o "${temp}/UpgradeProcessChecks"
+"${temp}/UpgradeProcessChecks" "${temp}"
 
 printf '[开始] 模型规则\n'
 xcrun swiftc -swift-version 6 -parse-as-library "${swift_cache[@]}" \

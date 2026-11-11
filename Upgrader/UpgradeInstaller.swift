@@ -42,12 +42,19 @@ struct UpgradePlan: Sendable {
   let candidateBuild: String
 }
 
+struct UpgradeOutcome: Sendable {
+  let widgetRecovery: WidgetExtensionRecoveryResult
+}
+
 enum UpgradeInstaller {
   private static let appIdentifier = "com.HongXunPan.CertGlance"
   private static let widgetIdentifier = "\(appIdentifier).Widget"
   private static let installerIdentifier = "\(appIdentifier).Upgrade"
   private static let signingSHA1 = "f7b4e6b1573d170587e9139eb1855f90803556a2"
   static let targetURL = URL(fileURLWithPath: "/Applications/CertGlance.app", isDirectory: true)
+  private static let widgetExecutablePath = targetURL.appendingPathComponent(
+    "Contents/PlugIns/SSLExpiryWidget.appex/Contents/MacOS/SSLExpiryWidget"
+  ).path
 
   static func preflight() throws -> UpgradePlan {
     guard Bundle.main.bundleIdentifier == installerIdentifier,
@@ -73,7 +80,7 @@ enum UpgradeInstaller {
     return UpgradePlan(installedBuild: installedBuild, candidateBuild: candidateBuild)
   }
 
-  static func apply(_ plan: UpgradePlan) throws {
+  static func apply(_ plan: UpgradePlan) throws -> UpgradeOutcome {
     let current = try preflight()
     guard current.installedBuild == plan.installedBuild,
       current.candidateBuild == plan.candidateBuild,
@@ -106,6 +113,8 @@ enum UpgradeInstaller {
     guard rechecked.installedBuild == plan.installedBuild,
       rechecked.candidateBuild == plan.candidateBuild
     else { throw UpgradeError.invalidVersion }
+    let oldWidgetProcesses = try WidgetExtensionProcess.capture(
+      executablePath: widgetExecutablePath)
 
     var resultingURL: NSURL?
     replacementStarted = true
@@ -120,6 +129,9 @@ enum UpgradeInstaller {
       throw UpgradeError.unexpectedReplacement
     }
     completed = true
+    return UpgradeOutcome(
+      widgetRecovery: WidgetExtensionProcess.terminateCaptured(
+        oldWidgetProcesses, executablePath: widgetExecutablePath))
   }
 
   private static func verifyApplication(_ url: URL) throws -> String {
